@@ -38,11 +38,12 @@
             <h2>Add Book via ISBN</h2>
 
             <div class="isbn-input-area">
-                <!-- Camera view area -->
-                <div id="camera-view-area" class="camera-placeholder">
-                    <video id="video-scanner" playsinline style="width: 100%; max-height: 200px; border: 1px solid grey;"></video>
-                    <p id="scan-status" style="margin-top: 5px;">Position barcode within the frame.</p>
-                    <button type="button" id="start-scan-btn" style="display: none;">Enable Camera</button> <!-- Initially hidden -->
+                <!-- Photo capture area -->
+                <div id="photo-capture-area" class="camera-placeholder">
+                    <img id="image-preview" src="#" alt="Barcode image preview" style="max-width: 100%; max-height: 150px; display: none; margin-bottom: 10px;">
+                    <label for="barcode-photo-input" class="btn-secondary">Take/Select Barcode Photo</label>
+                    <input type="file" id="barcode-photo-input" accept="image/*" capture="environment" style="display: none;">
+                    <p id="scan-status" style="margin-top: 5px;">Or enter ISBN manually below.</p>
                 </div>
 
                 <p class="separator-text">OR</p>

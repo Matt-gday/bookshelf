@@ -148,11 +148,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let allBooks = []; // Holds all books loaded from storage
     let currentView = 'grid'; // 'grid' or 'list'
     let currentlyFetchedApiData = null; // Holds data between API lookup and form save
-    let codeReader = null; // ZXing code reader instance
-    let currentCameraStream = null; // Hold the camera stream to stop it later
-    let barcodeDetector = null; // Instance of BarcodeDetector
-    let isScanning = false; // Flag to control the detection loop
-    let scanLoopId = null; // To hold the requestAnimationFrame ID
+    let barcodeDetector = null; // Instance of BarcodeDetector (kept for image processing)
+    let currentObjectUrl = null; // To revoke preview URL later
 
     // --- UI Elements ---
 
@@ -165,9 +162,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const isbnManualInput = document.getElementById('isbn-manual-input');
     const isbnLookupButton = document.getElementById('isbn-lookup-btn');
     const cancelIsbnInputButton = document.getElementById('cancel-isbn-input-btn');
-    const videoScannerElement = document.getElementById('video-scanner');
+    const imagePreviewElement = document.getElementById('image-preview');
+    const barcodePhotoInput = document.getElementById('barcode-photo-input');
     const scanStatusElement = document.getElementById('scan-status');
-    const startScanButton = document.getElementById('start-scan-btn'); // Re-confirming reference
 
     // Add Book Form Modal Elements
     const addBookFormContainer = document.getElementById('add-book-form-container');
@@ -244,25 +241,41 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Modal Handling ---
 
-    /** Shows the ISBN Input form modal and attempts to start scanner */
-    async function showIsbnInputModal() {
+    /** Shows the ISBN Input form modal */
+    function showIsbnInputModal() {
         if (isbnInputContainer) {
             currentlyFetchedApiData = null; // Clear any previous API data
-            if(isbnManualInput) isbnManualInput.value = '';
+            if (isbnManualInput) isbnManualInput.value = '';
+
+            // Reset photo input state
+            if (barcodePhotoInput) barcodePhotoInput.value = null; // Clear selected file
+            if (imagePreviewElement) {
+                imagePreviewElement.style.display = 'none'; // Hide preview
+                imagePreviewElement.removeAttribute('src'); // Remove old image source
+                if (currentObjectUrl) {
+                    URL.revokeObjectURL(currentObjectUrl); // Clean up previous blob URL
+                    currentObjectUrl = null;
+                }
+            }
+            if (scanStatusElement) scanStatusElement.textContent = 'Take/select photo or enter ISBN manually.';
+
             isbnInputContainer.classList.add('visible');
-
-            // Directly attempt to start scanner (defer should ensure library is ready)
-            await startScanner();
-
-            if(isbnManualInput) isbnManualInput.focus();
+            // Focus manual input as primary fallback
+            if (isbnManualInput) isbnManualInput.focus();
+            // Attempt to initialize BarcodeDetector if supported (for later use)
+            initializeBarcodeDetector();
         }
     }
 
-    /** Hides the ISBN Input form modal and stops scanner */
+    /** Hides the ISBN Input form modal */
     function hideIsbnInputModal() {
         if (isbnInputContainer) {
-            stopScanner(); // Stop camera when modal closes
             isbnInputContainer.classList.remove('visible');
+            // Clean up preview object URL if modal is closed
+            if (currentObjectUrl) {
+                 URL.revokeObjectURL(currentObjectUrl);
+                 currentObjectUrl = null;
+            }
         }
     }
 
@@ -320,146 +333,82 @@ document.addEventListener('DOMContentLoaded', () => {
         showAddBookModal(true, "Confirm / Add Book Details");
     }
 
-    // --- Scanner Handling (BarcodeDetector API) ---
+    // --- Scanner Handling (BarcodeDetector API on Image) ---
 
-    /** Initializes and starts the barcode scanner using BarcodeDetector API */
-    async function startScanner() {
+    /** Initializes BarcodeDetector if supported */
+    async function initializeBarcodeDetector() {
         if (!('BarcodeDetector' in window)) {
-            console.error("Barcode Detector API is not supported in this browser.");
-            if (scanStatusElement) scanStatusElement.textContent = 'Barcode scanning not supported.';
+            console.warn("Barcode Detector API is not supported in this browser.");
+            // Update UI or disable photo button if needed
             return;
         }
-        if (!videoScannerElement || !scanStatusElement) {
-            console.error("Scanner video or status elements not found.");
-            return;
-        }
-
-        // Ensure scanner isn't already running or starting
-        if (isScanning || currentCameraStream) {
-            console.log("Scanner is already active or starting.");
-            return;
-        }
-
-        scanStatusElement.textContent = 'Initializing scanner...';
-        isScanning = true; // Set flag early to prevent re-entry
+        if (barcodeDetector) return; // Already initialized
 
         try {
-            // Check supported formats first
             const supportedFormats = await BarcodeDetector.getSupportedFormats();
-            if (!supportedFormats.includes('ean_13')) {
-                console.error("EAN-13 format not supported by BarcodeDetector.");
-                scanStatusElement.textContent = 'ISBN format not supported.';
-                isScanning = false; // Reset flag
-                return;
+            if (supportedFormats.includes('ean_13')) {
+                barcodeDetector = new BarcodeDetector({ formats: ['ean_13'] });
+                console.log("BarcodeDetector initialized for EAN-13 (image detection).");
+            } else {
+                console.warn("EAN-13 format not supported by BarcodeDetector.");
+                // Disable photo detection feature?
             }
-            barcodeDetector = new BarcodeDetector({ formats: ['ean_13'] });
-            console.log("BarcodeDetector initialized for EAN-13.");
-
         } catch (error) {
             console.error("Failed to create BarcodeDetector:", error);
-            scanStatusElement.textContent = 'Failed to initialize scanner.';
-            isScanning = false; // Reset flag
-            return;
-        }
-
-        scanStatusElement.textContent = 'Initializing camera...';
-        try {
-            const constraints = { video: { facingMode: 'environment' }, audio: false };
-            currentCameraStream = await navigator.mediaDevices.getUserMedia(constraints);
-            videoScannerElement.srcObject = currentCameraStream;
-
-            // Use loadedmetadata event to ensure video dimensions are available before playing
-            videoScannerElement.onloadedmetadata = () => {
-                videoScannerElement.play().then(() => {
-                    console.log('Camera stream obtained and video playing.');
-                    scanStatusElement.textContent = 'Scanning for ISBN barcode...';
-                    // Start the detection loop using requestAnimationFrame
-                    detectBarcodeLoop();
-                }).catch(playError => {
-                    console.error("Error playing video stream:", playError);
-                    scanStatusElement.textContent = 'Error starting video.';
-                    stopScanner(); // Cleanup on play error
-                });
-            };
-            videoScannerElement.onerror = (err) => {
-                 console.error("Video element error:", err);
-                 scanStatusElement.textContent = 'Video error.';
-                 stopScanner();
-            };
-
-        } catch (error) {
-            console.error('Error accessing camera:', error);
-            if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-                scanStatusElement.textContent = 'Camera permission denied.';
-            } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
-                scanStatusElement.textContent = 'No suitable camera found.';
-            } else {
-                scanStatusElement.textContent = 'Could not start camera.';
-            }
-            stopScanner(); // Ensure cleanup if getUserMedia fails
         }
     }
 
-    /** The loop that continuously detects barcodes from the video stream */
-    async function detectBarcodeLoop() {
-        if (!isScanning || !barcodeDetector || !videoScannerElement || videoScannerElement.paused || videoScannerElement.ended || videoScannerElement.readyState < 2) { // HAVE_CURRENT_DATA
-            // Stop if scanning stopped, detector removed, video element issue
-            console.log("Stopping detectBarcodeLoop.", {isScanning, barcodeDetector, videoState: videoScannerElement?.readyState });
+    /** Handles the file selection/capture from the photo input */
+    async function handlePhotoSelected(event) {
+        const file = event.target.files ? event.target.files[0] : null;
+        if (!file || !imagePreviewElement || !scanStatusElement) return;
+
+        // Clear previous state
+        if (currentObjectUrl) {
+            URL.revokeObjectURL(currentObjectUrl);
+        }
+        scanStatusElement.textContent = 'Processing image...';
+
+        // Create a URL for preview
+        currentObjectUrl = URL.createObjectURL(file);
+        imagePreviewElement.src = currentObjectUrl;
+        imagePreviewElement.style.display = 'block'; // Show preview
+
+        // Attempt to detect barcode in the image
+        if (!barcodeDetector) {
+            console.warn("BarcodeDetector not initialized or not supported.");
+            scanStatusElement.textContent = 'Cannot scan image (detector not ready/supported).';
             return;
         }
 
         try {
-            const barcodes = await barcodeDetector.detect(videoScannerElement);
+            // Use the img element as the source for detection
+            const barcodes = await barcodeDetector.detect(imagePreviewElement);
+
+            let foundIsbn = null;
             if (barcodes && barcodes.length > 0) {
                 for (const barcode of barcodes) {
                     if (barcode.format === 'ean_13' && (barcode.rawValue.startsWith('978') || barcode.rawValue.startsWith('979'))) {
-                        console.log(`Detected ISBN: ${barcode.rawValue}`);
-                        scanStatusElement.textContent = `ISBN Found: ${barcode.rawValue}`;
-                        // Stop loop and camera FIRST, then handle lookup
-                        stopScanner();
-                        handleIsbnLookup(barcode.rawValue);
-                        return; // Found ISBN, exit loop immediately
+                        foundIsbn = barcode.rawValue;
+                        break; // Found one, stop looking
                     }
                 }
             }
+
+            if (foundIsbn) {
+                console.log(`Detected ISBN from image: ${foundIsbn}`);
+                scanStatusElement.textContent = `ISBN Found: ${foundIsbn}`; // Update status
+                // Automatically trigger the lookup
+                handleIsbnLookup(foundIsbn); // Pass detected ISBN to lookup function
+            } else {
+                console.log("No ISBN barcode detected in the image.");
+                scanStatusElement.textContent = 'No ISBN found in image. Try again or enter manually.';
+            }
+
         } catch (error) {
-            // Log detection errors but potentially continue scanning
-            console.error("Error during barcode detection cycle:", error);
-            // Optionally add a delay here if errors are frequent
+            console.error("Error detecting barcode from image:", error);
+            scanStatusElement.textContent = 'Error analyzing image.';
         }
-
-        // Schedule the next frame check if we are still scanning
-        scanLoopId = requestAnimationFrame(detectBarcodeLoop);
-    }
-
-    /** Stops the barcode scanner and releases the camera */
-    function stopScanner() {
-        console.log("Stopping scanner...");
-        isScanning = false; // Set flag to stop the loop
-        if (scanLoopId) {
-            cancelAnimationFrame(scanLoopId); // Cancel pending animation frame
-            scanLoopId = null;
-        }
-
-        if (currentCameraStream) {
-            currentCameraStream.getTracks().forEach(track => track.stop());
-            currentCameraStream = null;
-            console.log("Camera stream stopped.");
-        }
-        if (videoScannerElement) {
-            videoScannerElement.srcObject = null;
-            videoScannerElement.pause();
-            // Remove event listeners to prevent memory leaks
-            videoScannerElement.onloadedmetadata = null;
-            videoScannerElement.onerror = null;
-            // videoScannerElement.load(); // Sometimes needed, sometimes causes issues
-        }
-        barcodeDetector = null; // Can clear detector instance
-
-         if (scanStatusElement) {
-             // Decide whether to clear status or leave the last message
-             // scanStatusElement.textContent = 'Scanner stopped.';
-         }
     }
 
     // --- API Interaction (Google Books API) ---
@@ -550,27 +499,25 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     async function handleIsbnLookup(scannedIsbn) {
         let isbn = '';
+        // If called with a string arg, it's from the scanner (photo or video)
         if (scannedIsbn && typeof scannedIsbn === 'string') {
             isbn = scannedIsbn;
-            console.log(`Handling lookup for scanned ISBN: ${isbn}`);
-        } else if (isbnManualInput) {
+            console.log(`Handling lookup for detected ISBN: ${isbn}`);
+        } else if (isbnManualInput) { // Otherwise, assume manual button click
             isbn = isbnManualInput.value.trim();
             console.log(`Handling lookup for manual ISBN: ${isbn}`);
         }
 
         if (!isbn) {
-            alert("Please enter or scan an ISBN to look up.");
+            alert("Please enter, take photo of, or select image with an ISBN.");
             return;
         }
 
         console.log(`Looking up ISBN: ${isbn}`);
-        scanStatusElement.textContent = `Looking up ${isbn}...`; // Update status
-        // TODO: Add better loading indicator
+        if (scanStatusElement) scanStatusElement.textContent = `Looking up ${isbn}...`;
 
         const bookData = await fetchBookDataByISBN(isbn);
 
-        // Stop scanner just in case it was still running (e.g., manual lookup while scanning)
-        stopScanner();
         hideIsbnInputModal(); // Hide the input modal
 
         if (bookData) {
@@ -703,7 +650,8 @@ document.addEventListener('DOMContentLoaded', () => {
          console.warn("Add book button found, but ISBN input container might be missing.");
     }
     if (isbnLookupButton) {
-        isbnLookupButton.addEventListener('click', () => handleIsbnLookup()); // Ensure no argument passed from button click
+        // Pass no argument for manual lookup
+        isbnLookupButton.addEventListener('click', () => handleIsbnLookup());
     }
     if (cancelIsbnInputButton) {
         cancelIsbnInputButton.addEventListener('click', hideIsbnInputModal);
@@ -717,7 +665,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (resetDataButton) {
         resetDataButton.addEventListener('click', resetAllData);
     }
-    // if (startScanButton) startScanButton.addEventListener('click', startScanner);
+    if (barcodePhotoInput) {
+        barcodePhotoInput.addEventListener('change', handlePhotoSelected);
+    }
 
     // Load Data and Initial Render
     allBooks = loadBooksFromStorage();
