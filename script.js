@@ -243,9 +243,16 @@ async function showIsbnInputModal() {
         currentlyFetchedApiData = null; // Clear any previous API data
         if(isbnManualInput) isbnManualInput.value = '';
         isbnInputContainer.classList.add('visible');
-        // Attempt to start the scanner automatically
-        await startScanner();
-        if(isbnManualInput) isbnManualInput.focus(); // Focus manual input as fallback/alternative
+
+        // Add a short delay before starting scanner to allow library to load
+        setTimeout(async () => {
+            // Ensure modal is still visible before starting
+            if (isbnInputContainer.classList.contains('visible')) {
+                 await startScanner();
+            }
+        }, 100); // 100ms delay, adjust if needed
+
+        if(isbnManualInput) isbnManualInput.focus(); // Focus manual input immediately
     }
 }
 
