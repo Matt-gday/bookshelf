@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Victoria's Bookshelf</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- ZXing Library via CDN -->
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@zxing/library@latest/umd/zxing-library.min.js"></script>
+</head>
+<body>
+
+    <header class="top-bar">
+        <!-- Icons and controls will go here (Add, Filter, Search, View Toggle, Wishlist) -->
+        <h1>My Bookshelf</h1>
+        <!-- Placeholder for buttons -->
+        <div>
+            <button id="add-book-btn">+</button>
+            <button id="filter-btn">Filter</button>
+            <button id="search-btn">Search</button>
+            <button id="view-toggle-btn">Grid/List</button>
+            <button id="wishlist-btn">Wishlist</button>
+            <button id="reset-data-btn" class="btn-danger">Reset Data</button>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="book-display" id="book-display-area">
+            <!-- Book items will be rendered here by JavaScript -->
+            <p>Loading books...</p>
+        </section>
+    </main>
+
+    <!-- ISBN Input / Scan Modal (Initially Hidden via CSS) -->
+    <div id="isbn-input-container" class="modal-container">
+        <div class="modal-content">
+            <h2>Add Book via ISBN</h2>
+
+            <div class="isbn-input-area">
+                <!-- Camera view area -->
+                <div id="camera-view-area" class="camera-placeholder">
+                    <video id="video-scanner" playsinline style="width: 100%; max-height: 200px; border: 1px solid grey;"></video>
+                    <p id="scan-status" style="margin-top: 5px;">Position barcode within the frame.</p>
+                    <button type="button" id="start-scan-btn" style="display: none;">Enable Camera</button> <!-- Initially hidden -->
+                </div>
+
+                <p class="separator-text">OR</p>
+
+                <div class="manual-isbn-area">
+                    <label for="isbn-manual-input">Enter ISBN Manually:</label>
+                    <div class="input-group">
+                         <input type="text" id="isbn-manual-input" name="isbn-manual-input" placeholder="e.g., 978-3-16-148410-0">
+                         <button type="button" id="isbn-lookup-btn" class="btn-primary">Lookup</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                 <button type="button" id="cancel-isbn-input-btn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Book Form (Initially Hidden via CSS) -->
+    <div id="add-book-form-container" class="modal-container">
+        <div class="modal-content">
+            <h2 id="add-book-form-title">Add New Book Manually</h2>
+            <form id="add-book-form">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="title">Title *</label>
+                        <input type="text" id="title" name="title" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="authors">Author(s) *</label>
+                        <input type="text" id="authors" name="authors" placeholder="Comma-separated" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="isbn">ISBN</label>
+                        <input type="text" id="isbn" name="isbn">
+                    </div>
+                    <div class="form-group">
+                        <label for="userPageCount">Page Count</label>
+                        <input type="number" id="userPageCount" name="userPageCount" min="1">
+                    </div>
+
+                    <fieldset class="form-group span-2">
+                        <legend>Reader *</legend>
+                        <input type="radio" id="reader-matt" name="reader" value="Matt to Victoria" required>
+                        <label for="reader-matt">Matt to Victoria</label>
+                        <input type="radio" id="reader-victoria" name="reader" value="Victoria Reads Self">
+                        <label for="reader-victoria">Victoria Reads Self</label>
+                    </fieldset>
+
+                    <fieldset class="form-group span-2">
+                        <legend>Status *</legend>
+                        <input type="radio" id="status-reading" name="status" value="Currently Reading" required>
+                        <label for="status-reading">Currently Reading</label>
+                        <input type="radio" id="status-finished" name="status" value="Finished">
+                        <label for="status-finished">Finished</label>
+                        <input type="radio" id="status-wishlist" name="status" value="Wishlist">
+                        <label for="status-wishlist">Wishlist</label>
+                    </fieldset>
+
+                    <div class="form-group">
+                        <label for="personalRating">Rating (0-5, 0.5 steps)</label>
+                        <input type="number" id="personalRating" name="personalRating" min="0" max="5" step="0.5">
+                    </div>
+                    <div class="form-group">
+                        <label for="dateFinished">Date Finished</label>
+                        <input type="date" id="dateFinished" name="dateFinished">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="userSeriesTitle">Series Title</label>
+                        <input type="text" id="userSeriesTitle" name="userSeriesTitle">
+                    </div>
+                    <div class="form-group">
+                        <label for="userSeriesNumber">Series Number</label>
+                        <input type="text" id="userSeriesNumber" name="userSeriesNumber">
+                    </div>
+
+                    <div class="form-group span-2">
+                        <label for="userGenres">Genre(s)</label>
+                        <input type="text" id="userGenres" name="userGenres" placeholder="Comma-separated">
+                    </div>
+
+                    <div class="form-group span-2">
+                        <label for="customTags">Custom Tags</label>
+                        <input type="text" id="customTags" name="customTags" placeholder="Comma-separated">
+                    </div>
+
+                     <div class="form-group span-2">
+                        <label for="notes">Notes</label>
+                        <textarea id="notes" name="notes" rows="3"></textarea>
+                    </div>
+
+                    <div class="form-group span-2">
+                        <label for="userCoverImage">Upload Cover</label>
+                        <input type="file" id="userCoverImage" name="userCoverImage" accept="image/*">
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary">Save Book</button>
+                    <button type="button" id="cancel-add-book-btn">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Filter/Sort Panel Placeholder -->
+    <!-- Book Detail Modal/Page Placeholder -->
+
+    <script src="script.js"></script>
+</body>
+</html> 
