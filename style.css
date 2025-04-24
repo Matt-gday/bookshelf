@@ -147,7 +147,7 @@ a:hover {
 /* === Form Elements === */
 button, input, select, textarea {
     font-family: inherit;
-    font-size: 0.95rem;
+    font-size: 16px; /* Minimum 16px prevents iOS auto-zoom */
     color: var(--text-color-dark);
     box-sizing: border-box;
 }
@@ -172,6 +172,7 @@ button:active {
     transform: translateY(0px);
 }
 
+/* Special handling for form inputs to prevent auto-zoom */
 input[type="text"],
 input[type="number"],
 input[type="date"],
@@ -184,6 +185,7 @@ textarea {
     border-radius: var(--border-radius-md); /* Rounded inputs */
     background-color: var(--card-bg);
     transition: border-color var(--transition-speed) ease, box-shadow var(--transition-speed) ease;
+    font-size: 16px; /* Ensure minimum 16px on all input types */
 }
 input::placeholder,
 textarea::placeholder {
@@ -668,7 +670,7 @@ button > span.material-symbols-outlined:only-child {
     padding: 2rem 1rem;
     color: var(--text-color-medium);
     font-style: italic;
-    background-color: rgba(255, 255, 255, 0.7);
+    background-color: rgba(255, 255, 255, 0.9);
     border-radius: var(--border-radius-lg);
     margin: 1rem;
 }
@@ -1707,5 +1709,121 @@ button > span.material-symbols-outlined:only-child {
 @media (max-width: 767px) {
     .settings-action-btn {
         padding: 0.7rem 0.8rem;
+    }
+}
+
+/* Camera Barcode Scanner Styles */
+.camera-area {
+    margin-bottom: 1.5rem;
+    border-radius: var(--border-radius-md);
+    overflow: hidden;
+    background-color: var(--bg-color);
+}
+
+.camera-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.8rem;
+}
+
+.camera-header h3 {
+    font-size: 0.9rem;
+    color: var(--text-color-medium);
+    margin: 0;
+}
+
+.camera-toggle-btn {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.8rem;
+}
+
+.camera-container {
+    position: relative;
+    width: 100%;
+    height: 200px;
+    background-color: var(--placeholder-bg);
+    border-radius: var(--border-radius-md);
+    overflow: hidden;
+    border: 1px solid var(--border-color-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 0.8rem;
+    cursor: pointer;
+}
+
+.camera-preview,
+.camera-canvas {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.camera-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    color: var(--text-color-medium);
+    text-align: center;
+    padding: 1rem;
+}
+
+.camera-placeholder .material-symbols-outlined {
+    font-size: 2.5rem;
+    opacity: 0.7;
+}
+
+.camera-placeholder p {
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+.camera-status {
+    font-size: 0.8rem;
+    color: var(--text-color-medium);
+    text-align: center;
+    margin-top: 0.5rem;
+    min-height: 1.2rem;
+}
+
+.barcode-line {
+    position: absolute;
+    top: 50%;
+    left: 10%;
+    right: 10%;
+    height: 2px;
+    background-color: rgba(255, 0, 0, 0.7);
+    box-shadow: 0 0 8px red;
+    transform: translateY(-50%);
+    animation: scanLine 2s ease-in-out infinite;
+}
+
+@keyframes scanLine {
+    0% {
+        transform: translateY(-50px);
+    }
+    50% {
+        transform: translateY(50px);
+    }
+    100% {
+        transform: translateY(-50px);
+    }
+}
+
+/* Media query adjustments for the camera area */
+@media (max-width: 767px) {
+    .camera-container {
+        height: 180px;
+    }
+    
+    .camera-placeholder .material-symbols-outlined {
+        font-size: 2rem;
+    }
+    
+    .camera-placeholder p {
+        font-size: 0.8rem;
     }
 } 

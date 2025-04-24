@@ -1779,6 +1779,9 @@ document.addEventListener('DOMContentLoaded', function() {
     allBooks = loadBooksFromStorage();
     populateSeriesDatalist();
     renderBooks();
+
+    // Initialize the barcode scanner
+    initBarcodeScanner();
 });
 
 // --- Re-add Handler for Removing Custom Cover ---
@@ -2054,6 +2057,151 @@ function importBooksFromCSV(file) {
     };
     
     reader.readAsText(file);
+}
+
+// Barcode Scanner Functionality
+let cameraStream = null;
+let canvasContext = null;
+let scanActive = false;
+
+function initBarcodeScanner() {
+    const cameraToggleBtn = document.getElementById('camera-toggle-btn');
+    const cameraVideo = document.getElementById('camera-preview');
+    const cameraCanvas = document.getElementById('camera-canvas');
+    const cameraStatus = document.getElementById('camera-status');
+    const isbnInput = document.getElementById('isbn-input');
+    const cameraContainer = document.querySelector('.camera-container');
+    
+    if (!cameraToggleBtn) return;
+    
+    canvasContext = cameraCanvas.getContext('2d', { willReadFrequently: true });
+    
+    cameraToggleBtn.addEventListener('click', toggleCamera);
+    cameraContainer.addEventListener('click', toggleCamera);
+    
+    // Stop camera when modal is closed
+    const isbnModal = document.getElementById('isbn-modal');
+    if (isbnModal) {
+        isbnModal.addEventListener('hide.bs.modal', stopCamera);
+    }
+    
+    function toggleCamera() {
+        if (cameraStream) {
+            stopCamera();
+        } else {
+            startCamera();
+        }
+    }
+    
+    function startCamera() {
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            // Prefer rear camera for barcode scanning
+            navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: 'environment',
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                }
+            })
+            .then(function(stream) {
+                cameraStream = stream;
+                cameraVideo.srcObject = stream;
+                cameraVideo.setAttribute('playsinline', true); // required for iOS
+                cameraVideo.play();
+                scanActive = true;
+                cameraToggleBtn.textContent = 'Stop Camera';
+                cameraToggleBtn.classList.add('btn-danger');
+                cameraToggleBtn.classList.remove('btn-primary');
+                
+                cameraContainer.classList.add('active');
+                document.querySelector('.camera-placeholder').style.display = 'none';
+                
+                // Start detecting barcodes
+                requestAnimationFrame(scanBarcode);
+                
+                cameraStatus.textContent = 'Camera active. Position barcode in view.';
+            })
+            .catch(function(error) {
+                console.error('Camera error:', error);
+                cameraStatus.textContent = 'Camera access denied or not available.';
+            });
+        } else {
+            cameraStatus.textContent = 'Your browser does not support camera access.';
+        }
+    }
+    
+    function stopCamera() {
+        if (cameraStream) {
+            cameraVideo.pause();
+            cameraVideo.srcObject = null;
+            cameraStream.getTracks().forEach(track => track.stop());
+            cameraStream = null;
+            scanActive = false;
+            
+            cameraToggleBtn.textContent = 'Start Camera';
+            cameraToggleBtn.classList.remove('btn-danger');
+            cameraToggleBtn.classList.add('btn-primary');
+            
+            cameraContainer.classList.remove('active');
+            document.querySelector('.camera-placeholder').style.display = 'flex';
+            
+            cameraStatus.textContent = '';
+        }
+    }
+    
+    function scanBarcode() {
+        if (!scanActive) return;
+        
+        if (cameraVideo.readyState === cameraVideo.HAVE_ENOUGH_DATA) {
+            // Draw video frame to canvas
+            cameraCanvas.height = cameraVideo.videoHeight;
+            cameraCanvas.width = cameraVideo.videoWidth;
+            canvasContext.drawImage(cameraVideo, 0, 0, cameraCanvas.width, cameraCanvas.height);
+            
+            const imageData = canvasContext.getImageData(0, 0, cameraCanvas.width, cameraCanvas.height);
+            
+            try {
+                // Check if ZXing reader is initialized
+                if (!window.reader) {
+                    console.error("ZXing reader not initialized");
+                    cameraStatus.textContent = "Barcode scanner not available. Please refresh the page.";
+                    return;
+                }
+                
+                // Use ZXing library to decode the barcode
+                const code = window.reader.decode(imageData);
+                
+                if (code && code.text) {
+                    // Check if it's valid ISBN format (10 or 13 digits)
+                    const isbn = code.text.replace(/[^0-9X]/gi, '');
+                    
+                    if (/^(97(8|9))?\d{9}[\dX]$/i.test(isbn)) {
+                        console.log('ISBN found:', isbn);
+                        isbnInput.value = isbn;
+                        cameraStatus.textContent = `ISBN detected: ${isbn}`;
+                        
+                        // Optional: Stop camera after successful scan
+                        stopCamera();
+                        
+                        // Optional: Automatically trigger lookup
+                        setTimeout(() => {
+                            document.getElementById('isbn-lookup-btn').click();
+                        }, 500);
+                    } else {
+                        cameraStatus.textContent = 'Not a valid ISBN barcode. Try again.';
+                    }
+                }
+            } catch (error) {
+                // Scanning is ongoing, no need to show errors
+                console.debug("Scanning error (normal during scanning):", error);
+            }
+        }
+        
+        // Continue scanning
+        if (scanActive) {
+            requestAnimationFrame(scanBarcode);
+        }
+    }
 }
 
 // End of script

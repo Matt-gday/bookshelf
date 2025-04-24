@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
     <title>BOOKS</title>
     <!-- Google Font: Poppins -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -12,7 +12,28 @@
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
     <!-- Stylesheet -->
     <link rel="stylesheet" href="style.css">
-    <!-- ZXing Library Removed -->
+    <!-- ZXing Barcode Scanner Library -->
+    <script src="https://unpkg.com/@zxing/library@0.19.1" type="text/javascript"></script>
+    <script>
+        // Initialize ZXing reader
+        document.addEventListener('DOMContentLoaded', function() {
+            try {
+                if (typeof ZXing !== 'undefined') {
+                    // For newer versions of ZXing
+                    window.reader = new ZXing.BrowserMultiFormatReader();
+                    console.log("ZXing barcode reader initialized successfully (modern API)");
+                } else if (typeof zxing !== 'undefined') {
+                    // For older versions of ZXing
+                    window.reader = new zxing.BrowserMultiFormatReader();
+                    console.log("ZXing barcode reader initialized successfully (legacy API)");
+                } else {
+                    console.error("ZXing library not found in global scope");
+                }
+            } catch (error) {
+                console.error("Error initializing ZXing barcode reader:", error);
+            }
+        });
+    </script>
     <!-- Main Application Script (with defer) -->
     <script src="script.js" defer></script>
 </head>
@@ -84,8 +105,28 @@
             <h2>Add Book via ISBN</h2>
             <div class="modal-body">
                 <div class="isbn-input-area">
+                    <!-- Camera Scanner Area -->
+                    <div class="camera-area">
+                        <div class="camera-header">
+                            <h3>Scan Barcode</h3>
+                            <button type="button" id="camera-toggle-btn" class="btn-secondary camera-toggle-btn">
+                                <span class="material-symbols-outlined">photo_camera</span> Start Camera
+                            </button>
+                        </div>
+                        <div id="camera-container" class="camera-container">
+                            <video id="camera-preview" class="camera-preview" playsinline autoplay muted hidden></video>
+                            <canvas id="camera-canvas" class="camera-canvas" hidden></canvas>
+                            <div id="camera-placeholder" class="camera-placeholder">
+                                <span class="material-symbols-outlined">qr_code_scanner</span>
+                                <p>Tap to scan book barcode</p>
+                            </div>
+                        </div>
+                        <div id="camera-status" class="camera-status"></div>
+                    </div>
+                    
+                    <!-- Manual ISBN Input Area -->
                     <div class="manual-isbn-area">
-                        <label for="isbn-manual-input">Enter ISBN:</label>
+                        <label for="isbn-manual-input">Or Enter ISBN Manually:</label>
                         <div class="input-group">
                              <input type="text" id="isbn-manual-input" name="isbn-manual-input" placeholder="e.g., 978-1-76063-738-5" inputmode="numeric" pattern="[\d\-Xx ]+">
                              <button type="button" id="isbn-lookup-btn" class="btn-primary" aria-label="Lookup ISBN">
