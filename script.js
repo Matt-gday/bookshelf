@@ -2065,24 +2065,27 @@ let canvasContext = null;
 let scanActive = false;
 
 function initBarcodeScanner() {
-    const cameraToggleBtn = document.getElementById('camera-toggle-btn');
     const cameraVideo = document.getElementById('camera-preview');
     const cameraCanvas = document.getElementById('camera-canvas');
     const cameraStatus = document.getElementById('camera-status');
-    const isbnInput = document.getElementById('isbn-input');
     const cameraContainer = document.querySelector('.camera-container');
     
-    if (!cameraToggleBtn) return;
+    if (!cameraContainer) return;
     
     canvasContext = cameraCanvas.getContext('2d', { willReadFrequently: true });
     
-    cameraToggleBtn.addEventListener('click', toggleCamera);
+    // Only use the container click to toggle camera
     cameraContainer.addEventListener('click', toggleCamera);
     
     // Stop camera when modal is closed
-    const isbnModal = document.getElementById('isbn-modal');
-    if (isbnModal) {
-        isbnModal.addEventListener('hide.bs.modal', stopCamera);
+    const isbnInputContainer = document.getElementById('isbn-input-container');
+    if (isbnInputContainer) {
+        isbnInputContainer.addEventListener('click', function(e) {
+            // Only close if clicking directly on the modal container background (not its children)
+            if (e.target === isbnInputContainer) {
+                stopCamera();
+            }
+        });
     }
     
     function toggleCamera() {
@@ -2108,15 +2111,15 @@ function initBarcodeScanner() {
                 cameraVideo.srcObject = stream;
                 cameraVideo.setAttribute('playsinline', true); // required for iOS
                 
-                // Make ONLY video element visible, keep canvas hidden
+                // Make ONLY video element visible
                 cameraVideo.removeAttribute('hidden');
-                // Keep canvas hidden but prepare it for image processing
+                cameraVideo.style.display = 'block';
+                
+                cameraCanvas.style.display = 'none';
+                cameraCanvas.setAttribute('hidden', '');
                 
                 cameraVideo.play();
                 scanActive = true;
-                cameraToggleBtn.textContent = 'Stop Camera';
-                cameraToggleBtn.classList.add('btn-danger');
-                cameraToggleBtn.classList.remove('btn-primary');
                 
                 cameraContainer.classList.add('active');
                 document.querySelector('.camera-placeholder').style.display = 'none';
@@ -2145,10 +2148,7 @@ function initBarcodeScanner() {
             
             // Hide video element
             cameraVideo.setAttribute('hidden', '');
-            
-            cameraToggleBtn.textContent = 'Start Camera';
-            cameraToggleBtn.classList.remove('btn-danger');
-            cameraToggleBtn.classList.add('btn-primary');
+            cameraVideo.style.display = 'none';
             
             cameraContainer.classList.remove('active');
             document.querySelector('.camera-placeholder').style.display = 'flex';
@@ -2161,7 +2161,7 @@ function initBarcodeScanner() {
         if (!scanActive) return;
         
         if (cameraVideo.readyState === cameraVideo.HAVE_ENOUGH_DATA) {
-            // Draw video frame to canvas
+            // Draw video frame to canvas (invisible but used for image processing)
             cameraCanvas.height = cameraVideo.videoHeight;
             cameraCanvas.width = cameraVideo.videoWidth;
             canvasContext.drawImage(cameraVideo, 0, 0, cameraCanvas.width, cameraCanvas.height);
@@ -2176,65 +2176,107 @@ function initBarcodeScanner() {
                     return;
                 }
                 
-                // Use ZXing library to decode the barcode
-                // Try different approach to improve detection
+                // Try to decode the barcode
                 try {
                     const code = window.reader.decode(imageData);
-                    handleValidCode(code);
+                    console.log("Raw barcode data:", code.text);
+                    
+                    // Process the barcode data to extract ISBN
+                    processCodeData(code.text);
                 } catch (decodeError) {
-                    // Try alternative approach if direct decode fails
-                    try {
-                        if (typeof window.reader.decodeFromImageData === 'function') {
-                            const code = window.reader.decodeFromImageData(imageData);
-                            handleValidCode(code);
-                        }
-                    } catch (altError) {
-                        // Silently continue scanning
-                    }
+                    // Silent failure, continue scanning
                 }
             } catch (error) {
-                // Only log detailed errors for specific non-standard search errors
-                if (error.message && !error.message.includes("could not find finder")) {
-                    console.debug("Scanner error:", error.message);
+                if (error && error.message && !error.message.includes("could not find finder")) {
+                    console.log("Scanner error:", error.message);
                 }
             }
-        } else {
-            console.debug("Camera feed not ready yet");
         }
         
-        // Continue scanning
+        // Continue scanning if still active
         if (scanActive) {
             requestAnimationFrame(scanBarcode);
         }
     }
     
-    // Helper function to handle valid barcode detection
-    function handleValidCode(code) {
-        if (code && code.text) {
-            // Check if it's valid ISBN format (10 or 13 digits)
-            const isbn = code.text.replace(/[^0-9X]/gi, '');
+    // Process barcode data to extract ISBN
+    function processCodeData(rawData) {
+        if (!rawData) return;
+        
+        console.log("Processing code data:", rawData);
+        
+        // 1. Direct ISBN match (10 or 13 digits)
+        let isbn = rawData.replace(/[^0-9X]/gi, '');
+        if (/^(97(8|9))?\d{9}[\dX]$/i.test(isbn)) {
+            handleIsbnFound(isbn);
+            return;
+        }
+        
+        // 2. Check for embedded ISBN-13 (starts with 978 or 979)
+        let isbnMatch = rawData.match(/(978|979)\d{10}/);
+        if (isbnMatch) {
+            handleIsbnFound(isbnMatch[0]);
+            return;
+        }
+        
+        // 3. Check for ISBN format with hyphens
+        isbnMatch = rawData.match(/(?:ISBN(?:-13)?:?\s*)?(?=[0-9X]{13}$|(?=(?:[0-9]+[-\s]){3})[-\s0-9X]{17}$)97[89][-\s]?[0-9]{1,5}[-\s]?[0-9]+[-\s]?[0-9]+[-\s]?[0-9X]/i);
+        if (isbnMatch) {
+            handleIsbnFound(isbnMatch[0].replace(/[^0-9X]/gi, ''));
+            return;
+        }
+        
+        // 4. Check for ISBN-10
+        isbnMatch = rawData.match(/(?:ISBN(?:-10)?:?\s*)?(?=[0-9X]{10}$|(?=(?:[0-9]+[-\s]){3})[-\s0-9X]{13}$)[0-9]{1,5}[-\s]?[0-9]+[-\s]?[0-9]+[-\s]?[0-9X]/i);
+        if (isbnMatch) {
+            handleIsbnFound(isbnMatch[0].replace(/[^0-9X]/gi, ''));
+            return;
+        }
+        
+        // 5. Try to extract any 10-13 digit number that could be an ISBN
+        const digits = rawData.replace(/[^0-9]/g, '');
+        for (let i = 0; i <= digits.length - 10; i++) {
+            // Try ISBN-13
+            if (i <= digits.length - 13) {
+                const potential13 = digits.substr(i, 13);
+                if (potential13.startsWith('978') || potential13.startsWith('979')) {
+                    handleIsbnFound(potential13);
+                    return;
+                }
+            }
             
-            console.log("Potential code detected:", code.text, "Formatted:", isbn);
-            
-            if (/^(97(8|9))?\d{9}[\dX]$/i.test(isbn)) {
-                console.log('Valid ISBN found:', isbn);
-                // Update the manual ISBN input field with the scanned value
-                const isbnManualInput = document.getElementById('isbn-manual-input');
-                if (isbnManualInput) isbnManualInput.value = isbn;
-                
-                cameraStatus.textContent = `ISBN detected: ${isbn}`;
-                
-                // Stop camera after successful scan
-                stopCamera();
-                
-                // Automatically trigger lookup after a short delay
-                setTimeout(() => {
-                    document.getElementById('isbn-lookup-btn').click();
-                }, 800);
-            } else {
-                cameraStatus.textContent = 'Not a valid ISBN barcode. Try again.';
+            // Try ISBN-10
+            const potential10 = digits.substr(i, 10);
+            if (/^[0-9]{9}[0-9X]$/i.test(potential10)) {
+                handleIsbnFound(potential10);
+                return;
             }
         }
+        
+        // If we got this far, we couldn't extract an ISBN
+        cameraStatus.textContent = "Barcode detected, but no ISBN found. Try again.";
+    }
+    
+    // Handle when an ISBN is successfully found
+    function handleIsbnFound(isbn) {
+        console.log('Valid ISBN found:', isbn);
+        
+        // Update the manual ISBN input field
+        const isbnManualInput = document.getElementById('isbn-manual-input');
+        if (isbnManualInput) {
+            isbnManualInput.value = isbn;
+        }
+        
+        cameraStatus.textContent = `ISBN detected: ${isbn}`;
+        
+        // Stop camera
+        stopCamera();
+        
+        // Trigger lookup
+        setTimeout(() => {
+            const lookupBtn = document.getElementById('isbn-lookup-btn');
+            if (lookupBtn) lookupBtn.click();
+        }, 1000);
     }
 }
 

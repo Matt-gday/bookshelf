@@ -1757,48 +1757,19 @@ button > span.material-symbols-outlined:only-child {
     background-color: #000; /* Black background when active */
 }
 
-.camera-preview,
-.camera-canvas {
+.camera-preview {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    display: none; /* Hide by default */
 }
 
-/* Make sure canvas is hidden but video is displayed */
 .camera-canvas {
-    display: none;
-}
-
-.camera-preview {
-    display: block;
-}
-
-/* Add a horizontal scanning line when camera is active */
-.camera-container.active::after {
-    content: '';
+    display: none !important; /* Always hide canvas */
+    visibility: hidden;
+    width: 1px;
+    height: 1px;
     position: absolute;
-    top: 50%;
-    left: 5%;
-    right: 5%;
-    height: 2px;
-    background-color: rgba(255, 0, 0, 0.7);
-    box-shadow: 0 0 8px red;
-    transform: translateY(-50%);
-    animation: scanLine 2s ease-in-out infinite;
-    pointer-events: none; /* Allow clicks to pass through */
-    z-index: 10;
-}
-
-@keyframes scanLine {
-    0% {
-        transform: translateY(-50px);
-    }
-    50% {
-        transform: translateY(50px);
-    }
-    100% {
-        transform: translateY(-50px);
-    }
 }
 
 .camera-placeholder {
@@ -1810,16 +1781,19 @@ button > span.material-symbols-outlined:only-child {
     color: var(--text-color-medium);
     text-align: center;
     padding: 1rem;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.05);
+    transition: background-color 0.3s ease;
+}
+
+.camera-container:hover .camera-placeholder {
+    background-color: rgba(0, 0, 0, 0.1);
 }
 
 .camera-placeholder .material-symbols-outlined {
     font-size: 2.5rem;
     opacity: 0.7;
-}
-
-.camera-placeholder p {
-    margin: 0;
-    font-size: 0.9rem;
 }
 
 .camera-status {
