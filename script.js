@@ -2108,9 +2108,9 @@ function initBarcodeScanner() {
                 cameraVideo.srcObject = stream;
                 cameraVideo.setAttribute('playsinline', true); // required for iOS
                 
-                // Make video element visible
+                // Make ONLY video element visible, keep canvas hidden
                 cameraVideo.removeAttribute('hidden');
-                cameraCanvas.removeAttribute('hidden');
+                // Keep canvas hidden but prepare it for image processing
                 
                 cameraVideo.play();
                 scanActive = true;
@@ -2143,9 +2143,8 @@ function initBarcodeScanner() {
             cameraStream = null;
             scanActive = false;
             
-            // Hide video elements
+            // Hide video element
             cameraVideo.setAttribute('hidden', '');
-            cameraCanvas.setAttribute('hidden', '');
             
             cameraToggleBtn.textContent = 'Start Camera';
             cameraToggleBtn.classList.remove('btn-danger');
@@ -2178,29 +2177,19 @@ function initBarcodeScanner() {
                 }
                 
                 // Use ZXing library to decode the barcode
-                const code = window.reader.decode(imageData);
-                
-                if (code && code.text) {
-                    // Check if it's valid ISBN format (10 or 13 digits)
-                    const isbn = code.text.replace(/[^0-9X]/gi, '');
-                    
-                    if (/^(97(8|9))?\d{9}[\dX]$/i.test(isbn)) {
-                        console.log('ISBN found:', isbn);
-                        // Update the manual ISBN input field with the scanned value
-                        const isbnManualInput = document.getElementById('isbn-manual-input');
-                        if (isbnManualInput) isbnManualInput.value = isbn;
-                        
-                        cameraStatus.textContent = `ISBN detected: ${isbn}`;
-                        
-                        // Stop camera after successful scan
-                        stopCamera();
-                        
-                        // Automatically trigger lookup after a short delay
-                        setTimeout(() => {
-                            document.getElementById('isbn-lookup-btn').click();
-                        }, 800);
-                    } else {
-                        cameraStatus.textContent = 'Not a valid ISBN barcode. Try again.';
+                // Try different approach to improve detection
+                try {
+                    const code = window.reader.decode(imageData);
+                    handleValidCode(code);
+                } catch (decodeError) {
+                    // Try alternative approach if direct decode fails
+                    try {
+                        if (typeof window.reader.decodeFromImageData === 'function') {
+                            const code = window.reader.decodeFromImageData(imageData);
+                            handleValidCode(code);
+                        }
+                    } catch (altError) {
+                        // Silently continue scanning
                     }
                 }
             } catch (error) {
@@ -2216,6 +2205,35 @@ function initBarcodeScanner() {
         // Continue scanning
         if (scanActive) {
             requestAnimationFrame(scanBarcode);
+        }
+    }
+    
+    // Helper function to handle valid barcode detection
+    function handleValidCode(code) {
+        if (code && code.text) {
+            // Check if it's valid ISBN format (10 or 13 digits)
+            const isbn = code.text.replace(/[^0-9X]/gi, '');
+            
+            console.log("Potential code detected:", code.text, "Formatted:", isbn);
+            
+            if (/^(97(8|9))?\d{9}[\dX]$/i.test(isbn)) {
+                console.log('Valid ISBN found:', isbn);
+                // Update the manual ISBN input field with the scanned value
+                const isbnManualInput = document.getElementById('isbn-manual-input');
+                if (isbnManualInput) isbnManualInput.value = isbn;
+                
+                cameraStatus.textContent = `ISBN detected: ${isbn}`;
+                
+                // Stop camera after successful scan
+                stopCamera();
+                
+                // Automatically trigger lookup after a short delay
+                setTimeout(() => {
+                    document.getElementById('isbn-lookup-btn').click();
+                }, 800);
+            } else {
+                cameraStatus.textContent = 'Not a valid ISBN barcode. Try again.';
+            }
         }
     }
 }

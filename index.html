@@ -20,11 +20,35 @@
             try {
                 if (typeof ZXing !== 'undefined') {
                     // For newer versions of ZXing
-                    window.reader = new ZXing.BrowserMultiFormatReader();
+                    const hints = new Map();
+                    const formats = [
+                        ZXing.BarcodeFormat.EAN_13,
+                        ZXing.BarcodeFormat.EAN_8,
+                        ZXing.BarcodeFormat.CODE_39,
+                        ZXing.BarcodeFormat.CODE_128,
+                        ZXing.BarcodeFormat.UPC_A,
+                        ZXing.BarcodeFormat.UPC_E
+                    ];
+                    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
+                    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+                    
+                    window.reader = new ZXing.BrowserMultiFormatReader(hints);
                     console.log("ZXing barcode reader initialized successfully (modern API)");
                 } else if (typeof zxing !== 'undefined') {
                     // For older versions of ZXing
-                    window.reader = new zxing.BrowserMultiFormatReader();
+                    const hints = new Map();
+                    const formats = [
+                        zxing.BarcodeFormat.EAN_13,
+                        zxing.BarcodeFormat.EAN_8,
+                        zxing.BarcodeFormat.CODE_39,
+                        zxing.BarcodeFormat.CODE_128,
+                        zxing.BarcodeFormat.UPC_A,
+                        zxing.BarcodeFormat.UPC_E
+                    ];
+                    hints.set(zxing.DecodeHintType.POSSIBLE_FORMATS, formats);
+                    hints.set(zxing.DecodeHintType.TRY_HARDER, true);
+                    
+                    window.reader = new zxing.BrowserMultiFormatReader(hints);
                     console.log("ZXing barcode reader initialized successfully (legacy API)");
                 } else {
                     console.error("ZXing library not found in global scope");

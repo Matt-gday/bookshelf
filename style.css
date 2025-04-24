@@ -1764,6 +1764,15 @@ button > span.material-symbols-outlined:only-child {
     object-fit: cover;
 }
 
+/* Make sure canvas is hidden but video is displayed */
+.camera-canvas {
+    display: none;
+}
+
+.camera-preview {
+    display: block;
+}
+
 /* Add a horizontal scanning line when camera is active */
 .camera-container.active::after {
     content: '';
