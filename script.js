@@ -1477,14 +1477,17 @@ function setView(viewType) {
 // --- Document Ready --- //
 document.addEventListener('DOMContentLoaded', function() {
     console.log("DOM fully loaded, initializing app...");
-
+    
+    // Initialize dark mode from saved preference
+    updateDarkModeUI();
+    
     // --- UI Elements (Assignment) ---
-        bookDisplayArea = document.getElementById('book-display-area');
+    bookDisplayArea = document.getElementById('book-display-area');
     // Remove viewToggleButton reference as we now have separate view buttons
-        isbnInputContainer = document.getElementById('isbn-input-container');
-        isbnManualInput = document.getElementById('isbn-manual-input');
-        isbnLookupButton = document.getElementById('isbn-lookup-btn');
-        cancelIsbnInputButton = document.getElementById('cancel-isbn-input-btn');
+    isbnInputContainer = document.getElementById('isbn-input-container');
+    isbnManualInput = document.getElementById('isbn-manual-input');
+    isbnLookupButton = document.getElementById('isbn-lookup-btn');
+    cancelIsbnInputButton = document.getElementById('cancel-isbn-input-btn');
     lookupStatusElement = document.getElementById('isbn-lookup-status');
     seriesTitlesDatalist = document.getElementById('series-titles-list');
     addBookFormContainer = document.getElementById('add-book-form-container');
@@ -1492,11 +1495,11 @@ document.addEventListener('DOMContentLoaded', function() {
     cancelAddBookButton = document.getElementById('cancel-add-book-btn');
     addBookFormTitle = document.getElementById('add-book-form-title');
     resetDataButton = document.getElementById('reset-data-btn');
-        searchModal = document.getElementById('search-modal');
-        searchInput = document.getElementById('search-input');
-        searchSubmitBtn = document.getElementById('search-submit-btn');
-        searchCancelBtn = document.getElementById('search-cancel-btn');
-        searchStatusElement = document.getElementById('search-status');
+    searchModal = document.getElementById('search-modal');
+    searchInput = document.getElementById('search-input');
+    searchSubmitBtn = document.getElementById('search-submit-btn');
+    searchCancelBtn = document.getElementById('search-cancel-btn');
+    searchStatusElement = document.getElementById('search-status');
     filterModal = document.getElementById('filter-modal');
     filterForm = document.getElementById('filter-form');
     filterApplyBtn = document.getElementById('filter-apply-btn');
@@ -1504,25 +1507,25 @@ document.addEventListener('DOMContentLoaded', function() {
     filterCancelBtn = document.getElementById('filter-cancel-btn');
     
     // Book Detail Modal Elements
-        bookDetailModal = document.getElementById('book-detail-modal');
-        detailCover = document.getElementById('detail-cover');
-        detailTitle = document.getElementById('detail-title');
-        detailAuthor = document.getElementById('detail-author');
-        detailSeries = document.getElementById('detail-series');
-        detailRating = document.getElementById('detail-rating');
-        detailStatus = document.getElementById('detail-status');
-        detailReader = document.getElementById('detail-reader');
-        detailDateAdded = document.getElementById('detail-date-added');
-        detailDateFinished = document.getElementById('detail-date-finished');
-        detailGenres = document.getElementById('detail-genres');
-        detailTags = document.getElementById('detail-tags');
-        detailSynopsis = document.getElementById('detail-synopsis');
-        detailPageCount = document.getElementById('detail-page-count');
-        detailPublisher = document.getElementById('detail-publisher');
-        detailPublicationYear = document.getElementById('detail-publication-year');
-        detailIsbn = document.getElementById('detail-isbn');
-        editBookBtn = document.getElementById('edit-book-btn');
-        closeDetailBtn = document.getElementById('close-detail-btn');
+    bookDetailModal = document.getElementById('book-detail-modal');
+    detailCover = document.getElementById('detail-cover');
+    detailTitle = document.getElementById('detail-title');
+    detailAuthor = document.getElementById('detail-author');
+    detailSeries = document.getElementById('detail-series');
+    detailRating = document.getElementById('detail-rating');
+    detailStatus = document.getElementById('detail-status');
+    detailReader = document.getElementById('detail-reader');
+    detailDateAdded = document.getElementById('detail-date-added');
+    detailDateFinished = document.getElementById('detail-date-finished');
+    detailGenres = document.getElementById('detail-genres');
+    detailTags = document.getElementById('detail-tags');
+    detailSynopsis = document.getElementById('detail-synopsis');
+    detailPageCount = document.getElementById('detail-page-count');
+    detailPublisher = document.getElementById('detail-publisher');
+    detailPublicationYear = document.getElementById('detail-publication-year');
+    detailIsbn = document.getElementById('detail-isbn');
+    editBookBtn = document.getElementById('edit-book-btn');
+    closeDetailBtn = document.getElementById('close-detail-btn');
     deleteBookBtn = document.getElementById('delete-book-btn');
     synopsisDisplayText = document.getElementById('synopsis-display-text');
     editSynopsisBtn = document.getElementById('edit-synopsis-btn');
@@ -1531,18 +1534,18 @@ document.addEventListener('DOMContentLoaded', function() {
     detailReviewText = document.getElementById('detail-review-text');
     
     // Rating Modal Elements
-        ratingModal = document.getElementById('rating-review-modal');
-        ratingModalTitle = document.getElementById('rating-modal-title');
-        interactiveStarsContainer = document.getElementById('interactive-stars');
-        ratingValueDisplay = document.getElementById('rating-value-display');
-        reviewSection = document.getElementById('review-section');
-        reviewDisplayArea = document.getElementById('review-display-area');
-        reviewDisplayText = document.getElementById('review-display-text');
-        editReviewBtn = document.getElementById('edit-review-btn');
-        reviewInput = document.getElementById('review-input');
-        ratingCancelBtn = document.getElementById('rating-cancel-btn');
-        ratingSaveBtn = document.getElementById('rating-save-btn');
-        ratingCloseBtn = document.getElementById('rating-close-btn');
+    ratingModal = document.getElementById('rating-review-modal');
+    ratingModalTitle = document.getElementById('rating-modal-title');
+    interactiveStarsContainer = document.getElementById('interactive-stars');
+    ratingValueDisplay = document.getElementById('rating-value-display');
+    reviewSection = document.getElementById('review-section');
+    reviewDisplayArea = document.getElementById('review-display-area');
+    reviewDisplayText = document.getElementById('review-display-text');
+    editReviewBtn = document.getElementById('edit-review-btn');
+    reviewInput = document.getElementById('review-input');
+    ratingCancelBtn = document.getElementById('rating-cancel-btn');
+    ratingSaveBtn = document.getElementById('rating-save-btn');
+    ratingCloseBtn = document.getElementById('rating-close-btn');
     
     // Add Book Form Elements
     formCoverPreview = document.getElementById('form-cover-preview');
@@ -1550,7 +1553,7 @@ document.addEventListener('DOMContentLoaded', function() {
     formApiGenres = document.getElementById('api-genres-input');
     saveBookBtn = document.getElementById('save-book-btn');
     removeCustomCoverBtn = document.getElementById('remove-custom-cover-btn');
-        addManuallyBtn = document.getElementById('add-manually-btn');
+    addManuallyBtn = document.getElementById('add-manually-btn');
     
     // --- Bottom Navigation Bar Elements ---
     const homeNavBtn = document.getElementById('home-nav-btn');
@@ -1562,7 +1565,15 @@ document.addEventListener('DOMContentLoaded', function() {
     const filterNavBtn = document.getElementById('filter-nav-btn');
     filterBtn = filterNavBtn; // Set filterBtn to reference filterNavBtn
 
-        // --- Event Listeners ---
+    // Settings Modal Elements
+    const settingsBtn = document.getElementById('settings-btn');
+    const settingsModal = document.getElementById('settings-modal');
+    const settingsCloseBtn = document.getElementById('settings-close-btn');
+    exportBtn = document.getElementById('export-btn');
+    const importBtn = document.getElementById('import-btn');
+    const importFileInput = document.getElementById('import-file-input');
+
+    // --- Event Listeners ---
     
     // View buttons
     const gridViewBtn = document.getElementById('grid-view-btn');
@@ -1577,12 +1588,30 @@ document.addEventListener('DOMContentLoaded', function() {
     const darkModeBtn = document.getElementById('dark-mode-btn');
     if (darkModeBtn) darkModeBtn.addEventListener('click', toggleDarkMode);
     
+    // Settings Button and Modal
+    if (settingsBtn) settingsBtn.addEventListener('click', showSettingsModal);
+    if (settingsCloseBtn) settingsCloseBtn.addEventListener('click', hideSettingsModal);
+    if (exportBtn) exportBtn.addEventListener('click', exportBooksToCSV);
+    if (importBtn) {
+        importBtn.addEventListener('click', () => {
+            if (importFileInput) importFileInput.click();
+        });
+    }
+    if (importFileInput) {
+        importFileInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                importBooksFromCSV(file);
+            }
+        });
+    }
+    
     // Reset data button
     if (resetDataButton) resetDataButton.addEventListener('click', resetAllData);
     
     // Search modal
-        if (searchSubmitBtn) searchSubmitBtn.addEventListener('click', performSearch);
-        if (searchCancelBtn) searchCancelBtn.addEventListener('click', hideSearchModal);
+    if (searchSubmitBtn) searchSubmitBtn.addEventListener('click', performSearch);
+    if (searchCancelBtn) searchCancelBtn.addEventListener('click', hideSearchModal);
     
     // Filter functionality
     if (filterApplyBtn) filterApplyBtn.addEventListener('click', handleApplyFilters);
@@ -1605,8 +1634,8 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // Add book form
-        if (addBookForm) {
-            addBookForm.addEventListener('submit', handleAddBookSubmit);
+    if (addBookForm) {
+        addBookForm.addEventListener('submit', handleAddBookSubmit);
         
         // Make sure clicking the save button triggers form submission
         if (saveBookBtn) {
@@ -1624,14 +1653,16 @@ document.addEventListener('DOMContentLoaded', function() {
         // Initialize file name display updater
         updateFileNameDisplay();
     }
-            if (saveBookBtn) {
-                 saveBookBtn.addEventListener('click', (event) => {
-                     if (saveBookBtn.classList.contains('btn-check-fields')) {
+    
+    if (saveBookBtn) {
+        saveBookBtn.addEventListener('click', (event) => {
+            if (saveBookBtn.classList.contains('btn-check-fields')) {
                 validateFormAndToggleButtonState(true);
                 event.preventDefault();
-                     }
-                 });
             }
+        });
+    }
+    
     if (cancelAddBookButton) cancelAddBookButton.addEventListener('click', hideAddBookModal);
     
     // Book detail modal
@@ -1669,27 +1700,27 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // User cover upload
     const userCoverInput = addBookForm?.querySelector('#userCoverImage');
-            if (userCoverInput && formCoverPreview) {
-                userCoverInput.addEventListener('change', (event) => {
-                    const file = event.target.files ? event.target.files[0] : null;
-                    if (file) {
-                        const reader = new FileReader();
-                        reader.onload = (loadEvent) => {
-                            if (loadEvent.target && typeof loadEvent.target.result === 'string') {
-                                selectedCoverImageDataUrl = loadEvent.target.result;
-                                formCoverPreview.src = selectedCoverImageDataUrl;
-                                formCoverPreview.style.display = 'block';
-                                if (removeCustomCoverBtn) {
+    if (userCoverInput && formCoverPreview) {
+        userCoverInput.addEventListener('change', (event) => {
+            const file = event.target.files ? event.target.files[0] : null;
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (loadEvent) => {
+                    if (loadEvent.target && typeof loadEvent.target.result === 'string') {
+                        selectedCoverImageDataUrl = loadEvent.target.result;
+                        formCoverPreview.src = selectedCoverImageDataUrl;
+                        formCoverPreview.style.display = 'block';
+                        if (removeCustomCoverBtn) {
                             customCoverRemoved = false;
-                                    removeCustomCoverBtn.style.display = 'inline-block';
-                                    removeCustomCoverBtn.disabled = false;
-                                }
+                            removeCustomCoverBtn.style.display = 'inline-block';
+                            removeCustomCoverBtn.disabled = false;
+                        }
                     }
                 };
                 reader.readAsDataURL(file);
-                    }
-                });
             }
+        });
+    }
 
     if (removeCustomCoverBtn) {
         removeCustomCoverBtn.addEventListener('click', handleRemoveCustomCover);
@@ -1733,7 +1764,7 @@ document.addEventListener('DOMContentLoaded', function() {
         wishlistNavBtn.addEventListener('click', function() {
             setActiveNavButton('wishlist-nav-btn');
             isWishlistViewActive = true;
-        renderBooks();
+            renderBooks();
         });
     }
     
@@ -1748,9 +1779,6 @@ document.addEventListener('DOMContentLoaded', function() {
     allBooks = loadBooksFromStorage();
     populateSeriesDatalist();
     renderBooks();
-
-    // Initialize dark mode from saved preference
-    updateDarkModeUI();
 });
 
 // --- Re-add Handler for Removing Custom Cover ---
@@ -1851,6 +1879,181 @@ function updateDarkModeUI() {
         document.body.classList.remove('dark-mode');
         document.getElementById('dark-mode-btn')?.classList.remove('active');
     }
+}
+
+// Export books data to CSV
+function exportBooksToCSV() {
+    const books = loadBooksFromStorage();
+    if (!books || books.length === 0) {
+        alert('No books to export.');
+        return;
+    }
+
+    // Define CSV headers (all possible fields)
+    const headers = [
+        'id', 'isbn', 'title', 'authors', 'coverImageUrl', 'synopsis',
+        'publisher', 'publicationYear', 'pageCount', 'apiGenres',
+        'apiSeriesTitle', 'apiSeriesNumber', 'reader', 'status',
+        'personalRating', 'dateAdded', 'dateFinished', 'customTags',
+        'userSeriesTitle', 'userSeriesNumber', 'userPageCount', 'userCoverImage',
+        'review'
+    ];
+
+    // Convert books to CSV format
+    let csvContent = headers.join(',') + '\n';
+    
+    books.forEach(book => {
+        const row = headers.map(header => {
+            let value = book[header];
+            
+            // Handle arrays and objects
+            if (Array.isArray(value)) {
+                value = JSON.stringify(value).replace(/"/g, '""');
+            } else if (value && typeof value === 'object') {
+                value = JSON.stringify(value).replace(/"/g, '""');
+            }
+            
+            // Convert null/undefined to empty string
+            if (value === null || value === undefined) {
+                value = '';
+            }
+            
+            // Escape commas and quotes
+            value = String(value).replace(/"/g, '""');
+            if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+                value = `"${value}"`;
+            }
+            
+            return value;
+        });
+        
+        csvContent += row.join(',') + '\n';
+    });
+
+    // Create download link
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `books_export_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+// Settings Modal Functions
+function showSettingsModal() {
+    const settingsModal = document.getElementById('settings-modal');
+    if (settingsModal) {
+        settingsModal.classList.add('visible');
+    }
+}
+
+function hideSettingsModal() {
+    const settingsModal = document.getElementById('settings-modal');
+    if (settingsModal) {
+        settingsModal.classList.remove('visible');
+    }
+}
+
+// Import CSV data
+function importBooksFromCSV(file) {
+    if (!file) {
+        alert('No file selected for import.');
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const csvData = e.target.result;
+            const lines = csvData.split('\n');
+            
+            // Get headers from first line
+            const headers = lines[0].split(',').map(header => 
+                header.trim().replace(/^"(.+)"$/, '$1') // Remove quotes if present
+            );
+            
+            // Process data rows
+            const books = [];
+            for (let i = 1; i < lines.length; i++) {
+                if (!lines[i].trim()) continue; // Skip empty lines
+                
+                // Split the line by commas not inside quotes
+                let row = lines[i];
+                let values = [];
+                let inQuotes = false;
+                let currentValue = '';
+                
+                for (let j = 0; j < row.length; j++) {
+                    const char = row[j];
+                    if (char === '"') {
+                        if (j > 0 && row[j-1] === '\\') {
+                            // Escaped quote
+                            currentValue = currentValue.slice(0, -1) + '"';
+                        } else {
+                            // Toggle quote state
+                            inQuotes = !inQuotes;
+                        }
+                    } else if (char === ',' && !inQuotes) {
+                        // End of value
+                        values.push(currentValue.trim().replace(/^"(.+)"$/, '$1'));
+                        currentValue = '';
+                    } else {
+                        // Part of value
+                        currentValue += char;
+                    }
+                }
+                values.push(currentValue.trim().replace(/^"(.+)"$/, '$1')); // Add the last value
+                
+                // Create book object from row values
+                const book = {};
+                headers.forEach((header, index) => {
+                    let value = values[index] || '';
+                    
+                    // Convert string to array if needed
+                    if (value.startsWith('[') && value.endsWith(']')) {
+                        try {
+                            value = JSON.parse(value);
+                        } catch (e) {
+                            console.error(`Error parsing array for ${header}:`, e);
+                        }
+                    }
+                    
+                    // Convert empty strings to null for specific fields
+                    if (value === '' && ['personalRating', 'userPageCount', 'pageCount'].includes(header)) {
+                        value = null;
+                    }
+                    
+                    book[header] = value;
+                });
+                
+                books.push(book);
+            }
+            
+            // Confirm before replacing existing data
+            if (books.length > 0) {
+                if (confirm(`Import ${books.length} books? This will replace your current library.`)) {
+                    saveBooksToStorage(books);
+                    alert(`Successfully imported ${books.length} books. Refreshing page...`);
+                    location.reload(); // Refresh to show imported data
+                }
+            } else {
+                alert('No valid book data found in the imported file.');
+            }
+            
+        } catch (error) {
+            console.error('Error importing CSV:', error);
+            alert('Error importing CSV file. Please check the file format and try again.');
+        }
+    };
+    
+    reader.onerror = function() {
+        alert('Error reading the file. Please try again.');
+    };
+    
+    reader.readAsText(file);
 }
 
 // End of script

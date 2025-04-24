@@ -62,11 +62,12 @@
         
         <!-- Controls Group - Simplified to 3 buttons -->
         <div class="controls-group">
-            <button id="dark-mode-btn" aria-label="Toggle Dark Mode" class="header-btn"><span class="material-symbols-outlined">dark_mode</span></button>
-            <button id="grid-view-btn" aria-label="Grid View" class="header-btn view-btn active"><span class="material-symbols-outlined">grid_view</span></button>
-            <button id="list-view-btn" aria-label="List View" class="header-btn view-btn"><span class="material-symbols-outlined">view_list</span></button>
-            <button id="covers-view-btn" aria-label="Covers View" class="header-btn view-btn"><span class="material-symbols-outlined">apps</span></button>
-            <button id="reset-data-btn" class="btn-danger header-btn" aria-label="Reset All Data"><span class="material-symbols-outlined">delete_forever</span></button>
+            <button id="dark-mode-btn" aria-label="Toggle Dark Mode" class="header-btn small-btn"><span class="material-symbols-outlined">dark_mode</span></button>
+            <button id="grid-view-btn" aria-label="Grid View" class="header-btn small-btn view-btn active"><span class="material-symbols-outlined">grid_view</span></button>
+            <button id="list-view-btn" aria-label="List View" class="header-btn small-btn view-btn"><span class="material-symbols-outlined">view_list</span></button>
+            <button id="covers-view-btn" aria-label="Covers View" class="header-btn small-btn view-btn"><span class="material-symbols-outlined">apps</span></button>
+            <button id="settings-btn" aria-label="Settings" class="header-btn small-btn"><span class="material-symbols-outlined">settings</span></button>
+            <button id="reset-data-btn" class="btn-danger header-btn small-btn" aria-label="Reset All Data"><span class="material-symbols-outlined">delete_forever</span></button>
         </div>
     </header>
 
@@ -430,6 +431,33 @@
         </div>
     </div>
     <!-- End Rating/Review Modal -->
+
+    <!-- Settings Modal (Initially Hidden via CSS) -->
+    <div id="settings-modal" class="modal-container">
+        <div class="modal-content">
+            <h2>Settings</h2>
+            <div class="modal-body">
+                <div class="settings-group">
+                    <h3>Data Management</h3>
+                    <div class="settings-buttons">
+                        <button id="export-btn" class="btn-secondary settings-action-btn">
+                            <span class="material-symbols-outlined">download</span>
+                            <span>Export Data (CSV)</span>
+                        </button>
+                        <button id="import-btn" class="btn-secondary settings-action-btn">
+                            <span class="material-symbols-outlined">upload</span>
+                            <span>Import Data (CSV)</span>
+                        </button>
+                        <input type="file" id="import-file-input" accept=".csv" style="display: none;">
+                    </div>
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="button" id="settings-close-btn" aria-label="Close"><span class="material-symbols-outlined">close</span> Close</button>
+            </div>
+        </div>
+    </div>
+    <!-- End Settings Modal -->
 
     <!-- Filter/Sort Panel Placeholder -->
 

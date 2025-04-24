@@ -310,7 +310,7 @@ button > span.material-symbols-outlined:only-child {
 
 .controls-group {
     display: flex;
-    gap: 0.6rem;
+    gap: 0.4rem;
     align-items: center;
 }
 
@@ -335,13 +335,13 @@ button > span.material-symbols-outlined:only-child {
 }
 
 .header-btn {
-    padding: 0.6em;
+    padding: 0.4em;
     background-color: transparent;
     border: none;
     color: white;
     border-radius: 50%;
-    width: 2.8rem;
-    height: 2.8rem;
+    width: 2.2rem;
+    height: 2.2rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -353,7 +353,7 @@ button > span.material-symbols-outlined:only-child {
 }
 
 .header-btn .material-symbols-outlined {
-    font-size: 1.4rem;
+    font-size: 1.1rem;
 }
 
 .header-btn.btn-danger {
@@ -1652,4 +1652,60 @@ button > span.material-symbols-outlined:only-child {
     min-width: auto;
     width: auto;
     display: inline-flex;
+}
+
+/* Media query adjustments for mobile */
+@media (max-width: 767px) {
+    .header-btn {
+        width: 2rem;
+        height: 2rem;
+    }
+    
+    .header-btn .material-symbols-outlined {
+        font-size: 1rem;
+    }
+}
+
+/* Settings Modal Styling */
+#settings-modal .modal-content {
+    max-width: 450px;
+}
+
+.settings-group {
+    margin-bottom: 2rem;
+}
+
+.settings-group h3 {
+    font-size: 1.1rem;
+    color: var(--text-color-medium);
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border-color-light);
+}
+
+.settings-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+}
+
+.settings-action-btn {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.8rem;
+    padding: 0.8rem 1rem;
+    width: 100%;
+    font-weight: 500;
+}
+
+.settings-action-btn .material-symbols-outlined {
+    font-size: 1.3rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 767px) {
+    .settings-action-btn {
+        padding: 0.7rem 0.8rem;
+    }
 } 
