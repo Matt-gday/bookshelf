@@ -2233,7 +2233,7 @@ function initBarcodeScanner() {
     
     // Function to capture and scan the current frame
     function captureAndScanImage() {
-        if (!videoElement || videoElement.paused || videoElement.ended) {
+        if (!videoElem || videoElem.paused || videoElem.ended) {
             console.error('Video not available for capture');
             return;
         }
@@ -2242,11 +2242,11 @@ function initBarcodeScanner() {
         const context = canvas.getContext('2d');
         
         // Set canvas dimensions to match video
-        canvas.width = videoElement.videoWidth;
-        canvas.height = videoElement.videoHeight;
+        canvas.width = videoElem.videoWidth;
+        canvas.height = videoElem.videoHeight;
         
         // Draw video frame to canvas
-        context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+        context.drawImage(videoElem, 0, 0, canvas.width, canvas.height);
         
         // Make canvas visible and larger
         canvas.style.display = 'block';
@@ -2502,10 +2502,10 @@ function initBarcodeScanner() {
     // Stop video stream but keep UI elements
     function stopVideo() {
         // Stop the actual video stream
-        if (video && video.srcObject) {
-            const tracks = video.srcObject.getTracks();
+        if (videoElem && videoElem.srcObject) {
+            const tracks = videoElem.srcObject.getTracks();
             tracks.forEach(track => track.stop());
-            video.srcObject = null;
+            videoElem.srcObject = null;
         }
     }
     
