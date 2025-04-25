@@ -2349,11 +2349,14 @@ function initBarcodeScanner() {
     
     // Try to manually extract ISBN from the canvas image
     function tryManualIsbnExtraction() {
-        // Since we can see the ISBN printed on the image, let's create a quick entry option
+        // Let's check if we can extract an ISBN from the current frame
+        const canvas = document.getElementById('camera-canvas');
+        if (!canvas) return;
         
-        logDebug("Please enter the ISBN visible on the barcode (usually at top)", 'info');
+        logDebug("Attempting to extract potential ISBN from image", 'info');
         
-        // Create a quick entry button for what we see in the image
+        // Create a quick entry option without a specific ISBN
+        // In a production app, you would implement actual OCR here
         createQuickIsbnButton();
         
         // Prompt for manual ISBN if needed
@@ -2364,18 +2367,22 @@ function initBarcodeScanner() {
     }
     
     // Create a quick entry button to enter the ISBN from the image
-    function createQuickIsbnButton() {
+    function createQuickIsbnButton(detectedIsbn = '') {
         // Remove any existing quick entry button first
         const existingButton = document.getElementById('quick-isbn-entry');
         if (existingButton) {
             existingButton.remove();
         }
         
-        // Extract the visible ISBN from the image if possible
-        const visibleIsbn = '9781786837385'; // Hardcoded based on what we can see in the image
+        // Use the detected ISBN passed as parameter
+        const visibleIsbn = detectedIsbn;
         
         // Log for debugging
-        logDebug(`Barcode detected - ISBN appears to be ${visibleIsbn}`, 'success');
+        if (visibleIsbn) {
+            logDebug(`Barcode detected - ISBN appears to be ${visibleIsbn}`, 'success');
+        } else {
+            logDebug(`Barcode detected - prompting for manual entry`, 'success');
+        }
         
         // Create a new banner for quick ISBN entry
         const banner = document.createElement('div');
@@ -2467,6 +2474,8 @@ function initBarcodeScanner() {
         let isbn = rawData.replace(/[^0-9X]/gi, '');
         if (/^(97(8|9))?\d{9}[\dX]$/i.test(isbn)) {
             logDebug(`Direct ISBN match: ${isbn}`, 'success');
+            // Create quick button with detected ISBN, but still allow manual entry
+            createQuickIsbnButton(isbn);
             handleIsbnFound(isbn);
             return;
         }
@@ -2475,6 +2484,8 @@ function initBarcodeScanner() {
         let isbnMatch = rawData.match(/(978|979)\d{10}/);
         if (isbnMatch) {
             logDebug(`Embedded ISBN-13 match: ${isbnMatch[0]}`, 'success');
+            // Create quick button with detected ISBN, but still allow manual entry
+            createQuickIsbnButton(isbnMatch[0]);
             handleIsbnFound(isbnMatch[0]);
             return;
         }
@@ -2484,6 +2495,8 @@ function initBarcodeScanner() {
         if (isbnMatch) {
             const extractedIsbn = isbnMatch[0].replace(/[^0-9X]/gi, '');
             logDebug(`ISBN-13 with hyphens match: ${extractedIsbn}`, 'success');
+            // Create quick button with detected ISBN, but still allow manual entry
+            createQuickIsbnButton(extractedIsbn);
             handleIsbnFound(extractedIsbn);
             return;
         }
@@ -2493,6 +2506,8 @@ function initBarcodeScanner() {
         if (isbnMatch) {
             const extractedIsbn = isbnMatch[0].replace(/[^0-9X]/gi, '');
             logDebug(`ISBN-10 match: ${extractedIsbn}`, 'success');
+            // Create quick button with detected ISBN, but still allow manual entry
+            createQuickIsbnButton(extractedIsbn);
             handleIsbnFound(extractedIsbn);
             return;
         }
@@ -2507,6 +2522,8 @@ function initBarcodeScanner() {
                 const potential13 = digits.substr(i, 13);
                 if (potential13.startsWith('978') || potential13.startsWith('979')) {
                     logDebug(`Found potential ISBN-13: ${potential13}`, 'success');
+                    // Create quick button with detected ISBN, but still allow manual entry
+                    createQuickIsbnButton(potential13);
                     handleIsbnFound(potential13);
                     return;
                 }
@@ -2516,6 +2533,8 @@ function initBarcodeScanner() {
             const potential10 = digits.substr(i, 10);
             if (/^[0-9]{9}[0-9X]$/i.test(potential10)) {
                 logDebug(`Found potential ISBN-10: ${potential10}`, 'success');
+                // Create quick button with detected ISBN, but still allow manual entry
+                createQuickIsbnButton(potential10);
                 handleIsbnFound(potential10);
                 return;
             }
@@ -2523,6 +2542,8 @@ function initBarcodeScanner() {
         
         // If we got this far, we couldn't extract an ISBN
         logDebug("No ISBN pattern found in barcode data", 'warning');
+        // Still allow manual entry even if no ISBN was detected
+        createQuickIsbnButton('');
         cameraStatus.textContent = "Barcode detected, but no ISBN found. Try again.";
     }
     
@@ -2540,38 +2561,11 @@ function initBarcodeScanner() {
             return; // Cannot proceed without the input field
         }
         
-        cameraStatus.textContent = `ISBN detected: ${isbn}`;
+        cameraStatus.textContent = `ISBN detected: ${isbn}. Use button below or verify manually.`;
         
-        // Stop camera
-        stopCamera();
-        
-        // Trigger lookup immediately
-        logDebug("ATTEMPTING TO TRIGGER ISBN LOOKUP NOW", 'info');
-        const lookupBtn = document.getElementById('isbn-lookup-btn');
-        
-        if (lookupBtn) {
-            logDebug("ISBN lookup button found - clicking it", 'success');
-            // Try multiple approaches to ensure the click happens
-            try {
-                // Standard click
-                lookupBtn.click();
-                
-                // After a tiny delay, try again using other methods
-                setTimeout(() => {
-                    try {
-                        // Try direct dispatch
-                        lookupBtn.dispatchEvent(new Event('click', { bubbles: true }));
-                        logDebug("Dispatched backup click event", 'info');
-                    } catch (e) {
-                        logDebug(`Error in backup click: ${e.message}`, 'error');
-                    }
-                }, 100);
-            } catch (e) {
-                logDebug(`Error clicking button: ${e.message}`, 'error');
-            }
-        } else {
-            logDebug("CRITICAL ERROR: Could not find ISBN lookup button!", 'error');
-        }
+        // Don't automatically stop camera or trigger lookup
+        // This allows the user to check if the detected ISBN is correct
+        // The lookup will be triggered by the quick entry button if the user clicks it
     }
 }
 
