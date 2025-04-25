@@ -2069,39 +2069,17 @@ function initBarcodeScanner() {
     const cameraCanvas = document.getElementById('camera-canvas');
     const cameraStatus = document.getElementById('camera-status');
     const cameraContainer = document.querySelector('.camera-container');
-    const debugOutput = document.getElementById('barcode-debug-output');
-    const clearDebugBtn = document.getElementById('clear-debug-btn');
     
     if (!cameraContainer) return;
     
     canvasContext = cameraCanvas.getContext('2d', { willReadFrequently: true });
     
-    // Initialize clear debug button
-    if (clearDebugBtn) {
-        clearDebugBtn.addEventListener('click', function() {
-            if (debugOutput) debugOutput.innerHTML = '';
-        });
-    }
-    
-    // Helper function to log debug info
+    // Helper function to log debug info - simplified to console only
     function logDebug(message, type = 'info') {
-        if (!debugOutput) return;
-        
-        const now = new Date();
-        const timestamp = now.toLocaleTimeString() + '.' + now.getMilliseconds().toString().padStart(3, '0');
-        
-        const entry = document.createElement('div');
-        entry.className = `debug-entry debug-entry-${type}`;
-        
-        const timeSpan = document.createElement('span');
-        timeSpan.className = 'debug-entry-time';
-        timeSpan.textContent = timestamp;
-        
-        entry.appendChild(timeSpan);
-        entry.appendChild(document.createTextNode(message));
-        
-        debugOutput.appendChild(entry);
-        debugOutput.scrollTop = debugOutput.scrollHeight;
+        // Only log to console in development mode
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            console.log(`[Scanner ${type}]: ${message}`);
+        }
     }
     
     // Only use the container click to toggle camera
