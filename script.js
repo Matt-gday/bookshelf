@@ -2064,10 +2064,19 @@ let cameraInitialized = false;
 let videoActive = false;
 
 function initBarcodeScanner() {
-    const videoElem = document.getElementById('camera-video');
+    const videoElem = document.getElementById('camera-preview');
     const canvasElem = document.getElementById('camera-canvas');
     const cameraContainer = document.querySelector('.camera-container');
     const cameraStatus = document.querySelector('.camera-status');
+    const cameraPlaceholder = document.getElementById('camera-placeholder');
+    
+    // Add click event listener to the camera placeholder
+    if (cameraPlaceholder) {
+        cameraPlaceholder.addEventListener('click', function() {
+            cameraPlaceholder.style.display = 'none';
+            startCamera();
+        });
+    }
     
     let videoStream = null;
 
@@ -2081,6 +2090,9 @@ function initBarcodeScanner() {
             
             cameraContainer.classList.add('active');
             cameraStatus.textContent = 'Starting camera...';
+            
+            // Make video visible
+            videoElem.removeAttribute('hidden');
             
             // Create our scan target guide if it doesn't exist
             if (!scanTargetGuide) {
