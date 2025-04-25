@@ -2326,11 +2326,54 @@ function initBarcodeScanner() {
                         }
                     }
                     
-                    const result = window.reader.decode(imageData.data, imageData.width, imageData.height);
+                    // Try processing with different image parameters to improve detection
+                    let result = null;
+                    
+                    // First attempt with the target area
+                    try {
+                        debug('Attempting to decode barcode from target area...');
+                        result = window.reader.decode(imageData.data, imageData.width, imageData.height);
+                    } catch (e) {
+                        debug('Failed to decode from target area: ' + e.message);
+                    }
+                    
+                    // If that fails, try with the full frame
+                    if (!result) {
+                        try {
+                            debug('Attempting to decode from full frame...');
+                            const fullImageData = ctx.getImageData(0, 0, canvasElem.width, canvasElem.height);
+                            result = window.reader.decode(fullImageData.data, fullImageData.width, fullImageData.height);
+                        } catch (e) {
+                            debug('Failed to decode from full frame: ' + e.message);
+                        }
+                    }
+                    
+                    // If that fails, try with contrast enhancement
+                    if (!result) {
+                        try {
+                            debug('Attempting to decode with enhanced contrast...');
+                            // Create enhanced version with better contrast
+                            const targetCtxEnhanced = targetCanvas.getContext('2d');
+                            targetCtxEnhanced.filter = 'contrast(1.5) brightness(1.2)';
+                            targetCtxEnhanced.drawImage(
+                                canvasElem, 
+                                targetX, targetY, targetWidth, targetHeight,
+                                0, 0, targetWidth, targetHeight
+                            );
+                            const enhancedImageData = targetCtxEnhanced.getImageData(0, 0, targetWidth, targetHeight);
+                            result = window.reader.decode(enhancedImageData.data, enhancedImageData.width, enhancedImageData.height);
+                        } catch (e) {
+                            debug('Failed to decode with enhanced contrast: ' + e.message);
+                        }
+                    }
+                    
                     if (result && result.text) {
                         debug('ZXing decoded: ' + result.text);
                         processCodeData(result.text);
                         return;
+                    } else {
+                        debug('ZXing decoder did not return a result');
+                        cameraStatus.textContent = 'Barcode detected but could not read ISBN. Try entering manually.';
                     }
                 } catch (decodeError) {
                     debug('ZXing decode error: ' + decodeError.message);
@@ -2515,6 +2558,13 @@ function initBarcodeScanner() {
     function processCodeData(rawData) {
         debug('Processing code data: ' + rawData);
         
+        // Log the raw data to console for debugging
+        console.log('Raw scanned data:', rawData);
+        
+        // Normalize the data by removing any whitespace and converting to uppercase
+        const normalizedData = rawData.replace(/\s+/g, '').toUpperCase();
+        debug('Normalized data: ' + normalizedData);
+        
         // Pattern for direct ISBN match (10 or 13 digits, possibly with hyphens)
         const isbnPattern = /(?:ISBN(?:-1[03])?:?\s*)?(?=[-0-9 ]{17}|[-0-9X ]{13})(?:97[89][-\s]?)?[0-9]{1,5}[-\s]?[0-9]+[-\s]?[0-9]+[-\s]?[0-9X]/i;
         
@@ -2523,6 +2573,9 @@ function initBarcodeScanner() {
         
         // Pattern for just 10 or 13 consecutive digits (potential raw ISBN)
         const digitsOnlyPattern = /\b\d{10}\b|\b\d{13}\b/;
+        
+        // EAN-13 that might be an ISBN (starts with 978 or 979)
+        const ean13Pattern = /^(978|979)\d{10}$/;
         
         let isbn = null;
         
@@ -2541,6 +2594,14 @@ function initBarcodeScanner() {
                 debug('Found embedded ISBN: ' + isbn);
             }
         }
+        // Check for EAN-13 that might be an ISBN
+        else if (!isbn) {
+            const eanMatch = normalizedData.match(ean13Pattern);
+            if (eanMatch) {
+                isbn = eanMatch[0];
+                debug('Found EAN-13 that appears to be an ISBN: ' + isbn);
+            }
+        }
         // Finally try just finding 10 or 13 consecutive digits
         else if (!isbn) {
             const digitsMatch = rawData.match(digitsOnlyPattern);
@@ -2550,22 +2611,53 @@ function initBarcodeScanner() {
             }
         }
         
-        // If we have an ISBN, remove any non-digit/X characters
+        // If we found any potential ISBN candidate
         if (isbn) {
+            // Remove any non-digit/X characters
             isbn = isbn.replace(/[^0-9X]/gi, '');
             
-            // Validate length
+            // Check for 13-digit EAN that starts with 978 or 979 (ISBN prefix)
+            if (isbn.length === 13 && (isbn.startsWith('978') || isbn.startsWith('979'))) {
+                debug('Found ISBN-13 (EAN format): ' + isbn);
+                handleIsbnFound(isbn);
+                return;
+            }
+            
+            // Validate ISBN length
             if (isbn.length === 10 || isbn.length === 13) {
                 debug('Extracted valid ISBN: ' + isbn);
                 handleIsbnFound(isbn);
             } else {
                 debug('Invalid ISBN length: ' + isbn.length);
+                // Try to recover common patterns
+                if (isbn.length > 13) {
+                    // Try to extract valid ISBN from longer string
+                    const extracted = extractValidIsbnFromString(isbn);
+                    if (extracted) {
+                        debug('Recovered ISBN from longer string: ' + extracted);
+                        handleIsbnFound(extracted);
+                        return;
+                    }
+                }
                 tryManualIsbnExtraction();
             }
         } else {
             debug('No ISBN pattern found in: ' + rawData);
             tryManualIsbnExtraction();
         }
+    }
+    
+    // Helper function to try to extract valid ISBN from a longer string
+    function extractValidIsbnFromString(str) {
+        // Try to find a 13-digit ISBN
+        const isbn13Match = str.match(/(?:978|979)\d{10}/);
+        if (isbn13Match) return isbn13Match[0];
+        
+        // Try to find a 10-digit ISBN
+        const isbn10Match = str.match(/\d{9}[\dX]/);
+        if (isbn10Match) return isbn10Match[0];
+        
+        return null;
     }
     
     // Function to handle a found ISBN
