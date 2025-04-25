@@ -2132,76 +2132,121 @@ function initBarcodeScanner() {
     }
     
     function startCamera() {
+        if (scanActive) return; // Already active
+        
+        scanActive = true;
+        
+        // Show camera elements
+        cameraContainer.classList.add('active');
+        document.querySelector('.camera-placeholder').style.display = 'none';
+        
+        // Add scanning target guide
+        const scanTarget = document.createElement('div');
+        scanTarget.id = 'scan-target-guide';
+        scanTarget.style.cssText = `
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 70%;
+            height: 25%;
+            border: 3px dashed #ff3333;
+            border-radius: 10px;
+            box-shadow: 0 0 0 2000px rgba(0, 0, 0, 0.3);
+            z-index: 10;
+        `;
+        
+        // Add text guide
+        const scanGuideText = document.createElement('div');
+        scanGuideText.style.cssText = `
+            position: absolute;
+            top: calc(50% - 70px);
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            background-color: rgba(0, 0, 0, 0.6);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            z-index: 11;
+        `;
+        scanGuideText.textContent = "Position barcode in box";
+        
+        cameraContainer.appendChild(scanTarget);
+        cameraContainer.appendChild(scanGuideText);
+        
+        // Show camera if hidden
+        cameraVideo.removeAttribute('hidden');
+        cameraVideo.style.display = 'block';
+        
+        cameraStatus.textContent = 'Camera starting...';
+        
+        // Initialize scanner if needed
+        if (!window.reader) {
+            try {
+                window.reader = new ZXing.BrowserMultiFormatReader();
+                logDebug("ZXing barcode reader initialized", 'success');
+            } catch (e) {
+                logDebug(`Failed to initialize ZXing: ${e.message}`, 'error');
+            }
+        }
+        
+        // Get camera access
         if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-            logDebug('Starting camera...', 'info');
-            
-            // Prefer rear camera for barcode scanning
-            navigator.mediaDevices.getUserMedia({
-                video: {
+            navigator.mediaDevices.getUserMedia({ 
+                video: { 
                     facingMode: 'environment',
                     width: { ideal: 1280 },
                     height: { ideal: 720 }
-                }
-            })
-            .then(function(stream) {
-                cameraStream = stream;
-                cameraVideo.srcObject = stream;
-                cameraVideo.setAttribute('playsinline', true); // required for iOS
-                
-                // Make ONLY video element visible
-                cameraVideo.removeAttribute('hidden');
-                cameraVideo.style.display = 'block';
-                
-                cameraCanvas.style.display = 'none';
-                cameraCanvas.setAttribute('hidden', '');
-                
-                cameraVideo.play();
-                scanActive = true;
-                
-                cameraContainer.classList.add('active');
-                document.querySelector('.camera-placeholder').style.display = 'none';
-                
-                logDebug('Camera started successfully', 'success');
-                
-                // Log ZXing availability
-                if (window.reader) {
-                    logDebug('ZXing reader is ready', 'success');
+                } 
+            }).then(function(stream) {
+                if ('srcObject' in cameraVideo) {
+                    cameraVideo.srcObject = stream;
                 } else {
-                    logDebug('ZXing reader not initialized!', 'error');
+                    // Fallback for older browsers
+                    cameraVideo.src = window.URL.createObjectURL(stream);
                 }
+                cameraVideo.play();
+                cameraStatus.textContent = 'Scanning for barcode...';
                 
-                // Start detecting barcodes
-                requestAnimationFrame(scanBarcode);
+                // Start scanning
+                scanBarcode();
                 
-                cameraStatus.textContent = 'Camera active. Position barcode in view.';
-            })
-            .catch(function(error) {
-                console.error('Camera error:', error);
-                logDebug(`Camera error: ${error.message || error}`, 'error');
-                cameraStatus.textContent = 'Camera access denied or not available.';
+            }).catch(function(error) {
+                logDebug(`Camera error: ${error.name}: ${error.message}`, 'error');
+                cameraStatus.textContent = `Camera error: ${error.message}`;
+                scanActive = false;
             });
         } else {
-            logDebug('Browser does not support camera access', 'error');
-            cameraStatus.textContent = 'Your browser does not support camera access.';
+            logDebug('getUserMedia not supported', 'error');
+            cameraStatus.textContent = 'Camera not supported in this browser';
+            scanActive = false;
         }
     }
     
     function stopCamera() {
-        if (cameraStream) {
-            logDebug('Stopping camera', 'info');
+        scanActive = false;
+        
+        if (cameraVideo && cameraVideo.srcObject) {
+            const stream = cameraVideo.srcObject;
+            const tracks = stream.getTracks();
             
-            cameraVideo.pause();
+            tracks.forEach(track => track.stop());
+            
             cameraVideo.srcObject = null;
-            cameraStream.getTracks().forEach(track => track.stop());
-            cameraStream = null;
-            scanActive = false;
-            
-            // Hide video element
             cameraVideo.setAttribute('hidden', '');
             cameraVideo.style.display = 'none';
             
             cameraContainer.classList.remove('active');
             document.querySelector('.camera-placeholder').style.display = 'flex';
+            
+            // Remove scanning target guide
+            const scanTarget = document.getElementById('scan-target-guide');
+            if (scanTarget) scanTarget.remove();
+            
+            // Remove guide text
+            const scanGuideText = cameraContainer.querySelector('div[style*="top: calc(50% - 70px)"]');
+            if (scanGuideText) scanGuideText.remove();
             
             cameraStatus.textContent = '';
             logDebug('Camera stopped', 'info');
@@ -2230,18 +2275,24 @@ function initBarcodeScanner() {
                 cameraCanvas.width = cameraVideo.videoWidth;
                 canvasContext.drawImage(cameraVideo, 0, 0, cameraCanvas.width, cameraCanvas.height);
                 
-                // Check if the barcode is visible in the image by examining the data
-                const imageData = canvasContext.getImageData(0, 0, cameraCanvas.width, cameraCanvas.height);
+                // Focus on the target area for ZXing
+                const centerWidth = Math.floor(cameraCanvas.width * 0.7);
+                const centerHeight = Math.floor(cameraCanvas.height * 0.25);
+                const startX = Math.floor((cameraCanvas.width - centerWidth) / 2);
+                const startY = Math.floor((cameraCanvas.height - centerHeight) / 2);
                 
-                // Check if we can detect a barcode pattern even if we can't decode it
+                // Get the imageData for the entire canvas
+                const fullImageData = canvasContext.getImageData(0, 0, cameraCanvas.width, cameraCanvas.height);
+                
+                // Use our custom detector on the full image data but focusing on target area
                 if (scanCount % 15 === 0) { // Every 15 frames
-                    if (detectBarcodeInImage(imageData)) {
+                    if (detectBarcodeInImage(fullImageData)) {
                         // We found a likely barcode, offer manual entry
                         tryManualIsbnExtraction();
                     }
                 }
                 
-                // ZXING BARCODE CHECK - Try standard barcode scanning
+                // ZXING BARCODE CHECK - Try standard barcode scanning on target area only
                 if (!window.reader) {
                     if (shouldLog) {
                         logDebug("ZXing reader not initialized", 'error');
@@ -2250,13 +2301,27 @@ function initBarcodeScanner() {
                 }
                 
                 try {
-                    // Try basic decode 
-                    const code = window.reader.decode(imageData);
+                    // Create a smaller canvas for the target area
+                    const targetCanvas = document.createElement('canvas');
+                    targetCanvas.width = centerWidth;
+                    targetCanvas.height = centerHeight;
+                    const targetCtx = targetCanvas.getContext('2d');
+                    
+                    // Draw only the target area to this canvas
+                    targetCtx.drawImage(cameraVideo, 
+                        startX, startY, centerWidth, centerHeight,
+                        0, 0, centerWidth, centerHeight);
+                    
+                    // Get the image data from this smaller targeted canvas
+                    const targetImageData = targetCtx.getImageData(0, 0, centerWidth, centerHeight);
+                    
+                    // Try to decode just the target area
+                    const code = window.reader.decode(targetImageData);
                     
                     if (code && code.text) {
                         if (code.text !== lastRawData) {
                             lastRawData = code.text;
-                            logDebug(`Barcode detected: "${code.text}"`, 'success');
+                            logDebug(`Barcode detected in target area: "${code.text}"`, 'success');
                             processCodeData(code.text);
                         }
                     }
@@ -2265,7 +2330,7 @@ function initBarcodeScanner() {
                     if (decodeError && decodeError.name === 'TypeError') {
                         logDebug("Type error in ZXing decode, trying alternative approach", 'warning');
                         // Try to detect if there's a barcode in the image at all
-                        if (detectBarcodeInImage(imageData)) {
+                        if (detectBarcodeInImage(fullImageData)) {
                             tryManualIsbnExtraction();
                         }
                     } else if (shouldLog && decodeError && decodeError.message && 
@@ -2290,62 +2355,84 @@ function initBarcodeScanner() {
     
     // Helper to detect barcode patterns in the image
     function detectBarcodeInImage(imageData) {
-        // Simple barcode detection based on alternating black/white patterns
-        // This is a very basic approach and won't work for all barcodes
-        // but should help detect when a barcode is likely present
+        // Focus on the center area of the image (where the guide rectangle is)
+        const centerWidth = Math.floor(imageData.width * 0.7);  // 70% of width
+        const centerHeight = Math.floor(imageData.height * 0.25); // 25% of height
         
-        // Get a horizontal slice from the middle of the image
-        const middleY = Math.floor(imageData.height / 2);
-        const rowOffset = middleY * imageData.width * 4;
+        const startX = Math.floor((imageData.width - centerWidth) / 2);
+        const startY = Math.floor((imageData.height - centerHeight) / 2);
+        
+        // For visual debugging (uncomment if needed)
+        // canvasContext.strokeStyle = 'red';
+        // canvasContext.strokeRect(startX, startY, centerWidth, centerHeight);
         
         let transitions = 0;
         let lastPixelDark = false;
         let darkCount = 0;
         let brightCount = 0;
         
-        // Sample every 3rd pixel in the row to check for barcode-like patterns
-        for (let x = 0; x < imageData.width; x += 3) {
-            const idx = rowOffset + x * 4;
-            const r = imageData.data[idx];
-            const g = imageData.data[idx + 1];
-            const b = imageData.data[idx + 2];
+        // Sample pixels in the target area only
+        for (let y = startY; y < startY + centerHeight; y += 3) {
+            const rowOffset = y * imageData.width * 4;
             
-            // Calculate pixel brightness
-            const brightness = (r + g + b) / 3;
+            lastPixelDark = false; // Reset for each row
+            let rowTransitions = 0;
             
-            // Check if this is a dark pixel (likely part of barcode)
-            const isDark = brightness < 100;
-            
-            if (isDark) {
-                darkCount++;
-            } else {
-                brightCount++;
+            for (let x = startX; x < startX + centerWidth; x += 2) {
+                const idx = rowOffset + x * 4;
+                if (idx >= imageData.data.length) continue;
+                
+                const r = imageData.data[idx];
+                const g = imageData.data[idx + 1];
+                const b = imageData.data[idx + 2];
+                
+                // Calculate pixel brightness
+                const brightness = (r + g + b) / 3;
+                
+                // Check if this is a dark pixel (likely part of barcode)
+                const isDark = brightness < 100;
+                
+                if (isDark) {
+                    darkCount++;
+                } else {
+                    brightCount++;
+                }
+                
+                // Count transitions from dark to bright or bright to dark
+                if (x > startX && isDark !== lastPixelDark) {
+                    rowTransitions++;
+                }
+                
+                lastPixelDark = isDark;
             }
             
-            // Count transitions from dark to bright or bright to dark
-            if (x > 0 && isDark !== lastPixelDark) {
-                transitions++;
-            }
-            
-            lastPixelDark = isDark;
+            // Add row transitions to total
+            transitions += rowTransitions;
         }
         
         // If we see a high number of transitions and a decent ratio of dark/bright pixels,
         // it's likely a barcode - more strict thresholds
-        const hasHighTransitions = transitions > 40; // Increased from 20 to 40
-        const hasReasonableDarkBrightRatio = darkCount > 30 && brightCount > 30 && darkCount < (imageData.width/6); // More balanced ratio
+        const hasHighTransitions = transitions > 40;
+        const hasReasonableDarkBrightRatio = darkCount > 30 && brightCount > 30;
         
         // Check for regular pattern (typical in barcodes)
         let hasRegularPattern = false;
         if (transitions > 20) {
             // Count number of transitions in small segments to see if they're evenly distributed
             const segmentCount = 5;
-            const segmentWidth = Math.floor(imageData.width / segmentCount);
+            const segmentWidth = Math.floor(centerWidth / segmentCount);
             let segmentTransitions = new Array(segmentCount).fill(0);
+            
+            // Sample the middle row of the target area
+            const middleY = startY + Math.floor(centerHeight / 2);
+            const rowOffset = middleY * imageData.width * 4;
             
             lastPixelDark = false;
             for (let i = 0; i < segmentCount; i++) {
-                for (let x = i * segmentWidth; x < (i+1) * segmentWidth; x += 3) {
+                const segStartX = startX + (i * segmentWidth);
+                const segEndX = segStartX + segmentWidth;
+                
+                for (let x = segStartX; x < segEndX; x += 2) {
                     const idx = rowOffset + x * 4;
                     if (idx < imageData.data.length) {
                         const r = imageData.data[idx];
@@ -2354,7 +2441,7 @@ function initBarcodeScanner() {
                         const brightness = (r + g + b) / 3;
                         const isDark = brightness < 100;
                         
-                        if (x > i * segmentWidth && isDark !== lastPixelDark) {
+                        if (x > segStartX && isDark !== lastPixelDark) {
                             segmentTransitions[i]++;
                         }
                         
@@ -2368,11 +2455,11 @@ function initBarcodeScanner() {
             let mean = sum / segmentCount;
             let variance = segmentTransitions.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / segmentCount;
             
-            // Low variance means regular pattern across the image
-            hasRegularPattern = (variance < 25) && (mean > 5);
+            // Lower threshold for variance since we're in a targeted area
+            hasRegularPattern = (variance < 30) && (mean > 3);
             
             if (scanCount % 30 === 0) {
-                logDebug(`Segment transitions: ${segmentTransitions.join(', ')} | Variance: ${variance.toFixed(2)}`, 'info');
+                logDebug(`Target area segments: ${segmentTransitions.join(', ')} | Variance: ${variance.toFixed(2)}`, 'info');
             }
         }
         
@@ -2380,9 +2467,9 @@ function initBarcodeScanner() {
         
         // Log detection metrics periodically
         if (scanCount % 30 === 0) {
-            logDebug(`Barcode detection metrics: transitions=${transitions}, dark=${darkCount}, bright=${brightCount}`, 'info');
+            logDebug(`Target area metrics: transitions=${transitions}, dark=${darkCount}, bright=${brightCount}`, 'info');
             if (isBarcodeDetected) {
-                logDebug('BARCODE PATTERN DETECTED in image!', 'success');
+                logDebug('BARCODE PATTERN DETECTED in target area!', 'success');
             }
         }
         
