@@ -2070,6 +2070,12 @@ function initBarcodeScanner() {
     const cameraStatus = document.querySelector('.camera-status');
     const cameraPlaceholder = document.getElementById('camera-placeholder');
     
+    // Define debug function to prevent "can't find variable debug" error
+    function debug(message) {
+        console.log("[Camera Debug] " + message);
+        // You can also update a UI element if needed
+    }
+    
     // Add click event listener to the camera placeholder
     if (cameraPlaceholder) {
         cameraPlaceholder.addEventListener('click', function() {
@@ -2093,6 +2099,15 @@ function initBarcodeScanner() {
             
             // Make video visible
             videoElem.removeAttribute('hidden');
+            videoElem.style.display = 'block';
+            videoElem.style.width = '100%';
+            videoElem.style.height = '100%';
+            videoElem.style.objectFit = 'cover';
+            
+            // Hide the placeholder
+            if (cameraPlaceholder) {
+                cameraPlaceholder.style.display = 'none';
+            }
             
             // Create our scan target guide if it doesn't exist
             if (!scanTargetGuide) {
@@ -2202,7 +2217,17 @@ function initBarcodeScanner() {
     
     // Function to capture and scan a single image
     function captureAndScanImage() {
-        if (!videoActive) return;
+        if (!videoActive) {
+            cameraStatus.textContent = 'Camera not active. Please wait...';
+            return;
+        }
+        
+        // Check if video is ready
+        if (!videoElem.videoWidth || !videoElem.videoHeight) {
+            cameraStatus.textContent = 'Camera not ready yet. Please wait a moment and try again.';
+            console.error('Video dimensions not available yet');
+            return;
+        }
         
         // Flash effect for feedback
         const flashElement = document.createElement('div');
@@ -2228,6 +2253,15 @@ function initBarcodeScanner() {
         try {
             // Make canvas visible for debugging (can be hidden in production)
             canvasElem.removeAttribute('hidden');
+            canvasElem.style.display = 'block';
+            canvasElem.style.position = 'absolute';
+            canvasElem.style.top = '0';
+            canvasElem.style.left = '0';
+            canvasElem.style.width = '100%';
+            canvasElem.style.height = '100%';
+            canvasElem.style.objectFit = 'contain';
+            canvasElem.style.zIndex = '5';
+            canvasElem.style.opacity = '0.3'; // Make it semi-transparent so we can see through it
             
             // Set canvas dimensions to match video
             canvasElem.width = videoElem.videoWidth || 640;
@@ -2278,8 +2312,18 @@ function initBarcodeScanner() {
                 try {
                     // Ensure the ZXing reader exists
                     if (!window.reader) {
-                        debug('ZXing reader not initialized');
-                        return;
+                        // Try to initialize it here as a fallback
+                        if (typeof ZXing !== 'undefined') {
+                            window.reader = new ZXing.BrowserMultiFormatReader();
+                            console.log("ZXing reader initialized on-demand (simple mode)");
+                        } else if (typeof zxing !== 'undefined') {
+                            window.reader = new zxing.BrowserMultiFormatReader();
+                            console.log("ZXing reader initialized on-demand (legacy mode)");
+                        } else {
+                            debug('ZXing library not available');
+                            cameraStatus.textContent = 'Barcode scanner not available. Please enter ISBN manually.';
+                            return;
+                        }
                     }
                     
                     const result = window.reader.decode(imageData.data, imageData.width, imageData.height);
