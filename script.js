@@ -2499,6 +2499,24 @@ function initBarcodeScanner() {
         return detectedInAnyRow || avgTransitions > 25;
     }
     
+    // Function to restart video after taking a photo
+    function startVideo() {
+        // Make canvas invisible again
+        const canvas = document.getElementById('camera-canvas');
+        if (canvas) {
+            canvas.style.display = 'none';
+        }
+        
+        // Hide any debug info
+        const debugInfo = document.getElementById('camera-debug-info');
+        if (debugInfo) {
+            debugInfo.style.display = 'none';
+        }
+        
+        // Restart the camera
+        startCamera();
+    }
+    
     // Stop video stream but keep UI elements
     function stopVideo() {
         // Stop the actual video stream
