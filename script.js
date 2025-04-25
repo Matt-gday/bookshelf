@@ -2181,6 +2181,16 @@ function initBarcodeScanner() {
         
         cameraStatus.textContent = 'Camera starting...';
         
+        // Reset scan count and times
+        scanCount = 0;
+        lastRawData = null;
+        
+        // Clear any pending manual entry timeout
+        if (window.manualEntryTimeout) {
+            clearTimeout(window.manualEntryTimeout);
+            window.manualEntryTimeout = null;
+        }
+        
         // Initialize scanner if needed
         if (!window.reader) {
             try {
@@ -2207,7 +2217,23 @@ function initBarcodeScanner() {
                     cameraVideo.src = window.URL.createObjectURL(stream);
                 }
                 cameraVideo.play();
-                cameraStatus.textContent = 'Scanning for barcode...';
+                
+                // Show helpful instructions in the status area
+                cameraStatus.textContent = 'Position barcode in red box and hold steady';
+                
+                // After 3 seconds, show a more detailed hint
+                setTimeout(() => {
+                    if (scanActive) {
+                        cameraStatus.textContent = 'Make sure barcode is well-lit and not blurry';
+                    }
+                }, 3000);
+                
+                // After 10 seconds, show a patience message
+                setTimeout(() => {
+                    if (scanActive) {
+                        cameraStatus.textContent = 'Still searching for barcode - keep it centered';
+                    }
+                }, 10000);
                 
                 // Start scanning
                 scanBarcode();
@@ -2226,6 +2252,12 @@ function initBarcodeScanner() {
     
     function stopCamera() {
         scanActive = false;
+        
+        // Clear any pending timeout for manual entry
+        if (window.manualEntryTimeout) {
+            clearTimeout(window.manualEntryTimeout);
+            window.manualEntryTimeout = null;
+        }
         
         if (cameraVideo && cameraVideo.srcObject) {
             const stream = cameraVideo.srcObject;
@@ -2285,10 +2317,20 @@ function initBarcodeScanner() {
                 const fullImageData = canvasContext.getImageData(0, 0, cameraCanvas.width, cameraCanvas.height);
                 
                 // Use our custom detector on the full image data but focusing on target area
-                if (scanCount % 15 === 0) { // Every 15 frames
+                // Check only every 45 frames (about 1.5 seconds at 30fps) - Previously 15 frames
+                if (scanCount % 45 === 0) {
                     if (detectBarcodeInImage(fullImageData)) {
-                        // We found a likely barcode, offer manual entry
-                        tryManualIsbnExtraction();
+                        // We found a likely barcode, but add a delay before showing manual entry
+                        // to allow user time to position the barcode for actual detection
+                        if (!window.manualEntryTimeout) {
+                            window.manualEntryTimeout = setTimeout(() => {
+                                tryManualIsbnExtraction();
+                                window.manualEntryTimeout = null;
+                            }, 3000); // 3 second delay
+                            
+                            // Show a message to the user while waiting
+                            cameraStatus.textContent = "Barcode detected - hold steady while scanning...";
+                        }
                     }
                 }
                 
@@ -2322,6 +2364,13 @@ function initBarcodeScanner() {
                         if (code.text !== lastRawData) {
                             lastRawData = code.text;
                             logDebug(`Barcode detected in target area: "${code.text}"`, 'success');
+                            
+                            // Clear any pending manual entry timeout
+                            if (window.manualEntryTimeout) {
+                                clearTimeout(window.manualEntryTimeout);
+                                window.manualEntryTimeout = null;
+                            }
+                            
                             processCodeData(code.text);
                         }
                     }
@@ -2331,7 +2380,15 @@ function initBarcodeScanner() {
                         logDebug("Type error in ZXing decode, trying alternative approach", 'warning');
                         // Try to detect if there's a barcode in the image at all
                         if (detectBarcodeInImage(fullImageData)) {
-                            tryManualIsbnExtraction();
+                            // Don't immediately show manual entry - let the timeout handle it
+                            if (!window.manualEntryTimeout) {
+                                window.manualEntryTimeout = setTimeout(() => {
+                                    tryManualIsbnExtraction();
+                                    window.manualEntryTimeout = null;
+                                }, 3000); // 3 second delay
+                                
+                                cameraStatus.textContent = "Barcode detected - hold steady while scanning...";
+                            }
                         }
                     } else if (shouldLog && decodeError && decodeError.message && 
                                !decodeError.message.includes("could not find finder")) {
@@ -2412,12 +2469,12 @@ function initBarcodeScanner() {
         
         // If we see a high number of transitions and a decent ratio of dark/bright pixels,
         // it's likely a barcode - more strict thresholds
-        const hasHighTransitions = transitions > 40;
-        const hasReasonableDarkBrightRatio = darkCount > 30 && brightCount > 30;
+        const hasHighTransitions = transitions > 50; // Increased from 40 to 50
+        const hasReasonableDarkBrightRatio = darkCount > 40 && brightCount > 40; // Increased from 30 to 40
         
         // Check for regular pattern (typical in barcodes)
         let hasRegularPattern = false;
-        if (transitions > 20) {
+        if (transitions > 30) { // Increased from 20 to 30
             // Count number of transitions in small segments to see if they're evenly distributed
             const segmentCount = 5;
             const segmentWidth = Math.floor(centerWidth / segmentCount);
@@ -2456,13 +2513,15 @@ function initBarcodeScanner() {
             let variance = segmentTransitions.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / segmentCount;
             
             // Lower threshold for variance since we're in a targeted area
-            hasRegularPattern = (variance < 30) && (mean > 3);
+            // Require a higher minimum average of transitions per segment
+            hasRegularPattern = (variance < 25) && (mean > 5);
             
             if (scanCount % 30 === 0) {
                 logDebug(`Target area segments: ${segmentTransitions.join(', ')} | Variance: ${variance.toFixed(2)}`, 'info');
             }
         }
         
+        // Require meeting all three criteria to detect a barcode
         const isBarcodeDetected = hasHighTransitions && hasReasonableDarkBrightRatio && hasRegularPattern;
         
         // Log detection metrics periodically
