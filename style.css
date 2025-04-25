@@ -1841,4 +1841,73 @@ button > span.material-symbols-outlined:only-child {
     .camera-placeholder p {
         font-size: 0.8rem;
     }
+}
+
+/* Debug Panel Styles */
+.barcode-debug-panel {
+    border: 1px solid var(--border-color-light);
+    border-radius: var(--border-radius-md);
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+    background-color: #f8f8f8;
+    overflow: hidden;
+}
+
+.debug-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem;
+    background-color: #eeeeee;
+    border-bottom: 1px solid var(--border-color-light);
+}
+
+.debug-header h4 {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--text-color-medium);
+}
+
+.btn-small {
+    padding: 0.2rem 0.5rem;
+    font-size: 0.8rem;
+}
+
+.barcode-debug-output {
+    padding: 0.5rem;
+    max-height: 150px;
+    overflow-y: auto;
+    font-family: monospace;
+    font-size: 0.8rem;
+    color: #333;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.debug-entry {
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px dashed #ddd;
+}
+
+.debug-entry-time {
+    font-size: 0.7rem;
+    color: #666;
+    margin-right: 0.5rem;
+}
+
+.debug-entry-success {
+    color: #4CAF50;
+}
+
+.debug-entry-error {
+    color: #F44336;
+}
+
+.debug-entry-warning {
+    color: #FF9800;
+}
+
+.debug-entry-info {
+    color: #2196F3;
 } 

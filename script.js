@@ -2069,10 +2069,40 @@ function initBarcodeScanner() {
     const cameraCanvas = document.getElementById('camera-canvas');
     const cameraStatus = document.getElementById('camera-status');
     const cameraContainer = document.querySelector('.camera-container');
+    const debugOutput = document.getElementById('barcode-debug-output');
+    const clearDebugBtn = document.getElementById('clear-debug-btn');
     
     if (!cameraContainer) return;
     
     canvasContext = cameraCanvas.getContext('2d', { willReadFrequently: true });
+    
+    // Initialize clear debug button
+    if (clearDebugBtn) {
+        clearDebugBtn.addEventListener('click', function() {
+            if (debugOutput) debugOutput.innerHTML = '';
+        });
+    }
+    
+    // Helper function to log debug info
+    function logDebug(message, type = 'info') {
+        if (!debugOutput) return;
+        
+        const now = new Date();
+        const timestamp = now.toLocaleTimeString() + '.' + now.getMilliseconds().toString().padStart(3, '0');
+        
+        const entry = document.createElement('div');
+        entry.className = `debug-entry debug-entry-${type}`;
+        
+        const timeSpan = document.createElement('span');
+        timeSpan.className = 'debug-entry-time';
+        timeSpan.textContent = timestamp;
+        
+        entry.appendChild(timeSpan);
+        entry.appendChild(document.createTextNode(message));
+        
+        debugOutput.appendChild(entry);
+        debugOutput.scrollTop = debugOutput.scrollHeight;
+    }
     
     // Only use the container click to toggle camera
     cameraContainer.addEventListener('click', toggleCamera);
@@ -2098,6 +2128,8 @@ function initBarcodeScanner() {
     
     function startCamera() {
         if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            logDebug('Starting camera...', 'info');
+            
             // Prefer rear camera for barcode scanning
             navigator.mediaDevices.getUserMedia({
                 video: {
@@ -2124,6 +2156,15 @@ function initBarcodeScanner() {
                 cameraContainer.classList.add('active');
                 document.querySelector('.camera-placeholder').style.display = 'none';
                 
+                logDebug('Camera started successfully', 'success');
+                
+                // Log ZXing availability
+                if (window.reader) {
+                    logDebug('ZXing reader is ready', 'success');
+                } else {
+                    logDebug('ZXing reader not initialized!', 'error');
+                }
+                
                 // Start detecting barcodes
                 requestAnimationFrame(scanBarcode);
                 
@@ -2131,15 +2172,19 @@ function initBarcodeScanner() {
             })
             .catch(function(error) {
                 console.error('Camera error:', error);
+                logDebug(`Camera error: ${error.message || error}`, 'error');
                 cameraStatus.textContent = 'Camera access denied or not available.';
             });
         } else {
+            logDebug('Browser does not support camera access', 'error');
             cameraStatus.textContent = 'Your browser does not support camera access.';
         }
     }
     
     function stopCamera() {
         if (cameraStream) {
+            logDebug('Stopping camera', 'info');
+            
             cameraVideo.pause();
             cameraVideo.srcObject = null;
             cameraStream.getTracks().forEach(track => track.stop());
@@ -2154,13 +2199,26 @@ function initBarcodeScanner() {
             document.querySelector('.camera-placeholder').style.display = 'flex';
             
             cameraStatus.textContent = '';
+            logDebug('Camera stopped', 'info');
         }
     }
+    
+    let scanCount = 0;
+    let lastRawData = null;
     
     function scanBarcode() {
         if (!scanActive) return;
         
+        scanCount++;
+        
+        // Only log every 30 frames to avoid flooding the debug panel
+        const shouldLog = scanCount % 30 === 0;
+        
         if (cameraVideo.readyState === cameraVideo.HAVE_ENOUGH_DATA) {
+            if (shouldLog) {
+                logDebug(`Scanning frame #${scanCount}`, 'info');
+            }
+            
             // Draw video frame to canvas (invisible but used for image processing)
             cameraCanvas.height = cameraVideo.videoHeight;
             cameraCanvas.width = cameraVideo.videoWidth;
@@ -2171,7 +2229,9 @@ function initBarcodeScanner() {
             try {
                 // Check if ZXing reader is initialized
                 if (!window.reader) {
-                    console.error("ZXing reader not initialized");
+                    if (shouldLog) {
+                        logDebug("ZXing reader not initialized", 'error');
+                    }
                     cameraStatus.textContent = "Barcode scanner not available. Please refresh the page.";
                     return;
                 }
@@ -2179,18 +2239,29 @@ function initBarcodeScanner() {
                 // Try to decode the barcode
                 try {
                     const code = window.reader.decode(imageData);
-                    console.log("Raw barcode data:", code.text);
                     
-                    // Process the barcode data to extract ISBN
-                    processCodeData(code.text);
+                    // Log the raw barcode data
+                    if (code && code.text && code.text !== lastRawData) {
+                        lastRawData = code.text;
+                        logDebug(`Raw barcode data detected: "${code.text}"`, 'success');
+                        
+                        // Process the barcode data to extract ISBN
+                        processCodeData(code.text);
+                    }
                 } catch (decodeError) {
-                    // Silent failure, continue scanning
+                    // Only log occasional decode errors to avoid flooding
+                    if (shouldLog && decodeError && decodeError.message && 
+                        !decodeError.message.includes("could not find finder")) {
+                        logDebug(`Decode error: ${decodeError.message}`, 'warning');
+                    }
                 }
             } catch (error) {
                 if (error && error.message && !error.message.includes("could not find finder")) {
-                    console.log("Scanner error:", error.message);
+                    logDebug(`Scanner error: ${error.message}`, 'error');
                 }
             }
+        } else if (shouldLog) {
+            logDebug("Camera feed not ready yet", 'info');
         }
         
         // Continue scanning if still active
@@ -2203,11 +2274,12 @@ function initBarcodeScanner() {
     function processCodeData(rawData) {
         if (!rawData) return;
         
-        console.log("Processing code data:", rawData);
+        logDebug(`Processing code data: "${rawData}"`, 'info');
         
         // 1. Direct ISBN match (10 or 13 digits)
         let isbn = rawData.replace(/[^0-9X]/gi, '');
         if (/^(97(8|9))?\d{9}[\dX]$/i.test(isbn)) {
+            logDebug(`Direct ISBN match: ${isbn}`, 'success');
             handleIsbnFound(isbn);
             return;
         }
@@ -2215,6 +2287,7 @@ function initBarcodeScanner() {
         // 2. Check for embedded ISBN-13 (starts with 978 or 979)
         let isbnMatch = rawData.match(/(978|979)\d{10}/);
         if (isbnMatch) {
+            logDebug(`Embedded ISBN-13 match: ${isbnMatch[0]}`, 'success');
             handleIsbnFound(isbnMatch[0]);
             return;
         }
@@ -2222,24 +2295,31 @@ function initBarcodeScanner() {
         // 3. Check for ISBN format with hyphens
         isbnMatch = rawData.match(/(?:ISBN(?:-13)?:?\s*)?(?=[0-9X]{13}$|(?=(?:[0-9]+[-\s]){3})[-\s0-9X]{17}$)97[89][-\s]?[0-9]{1,5}[-\s]?[0-9]+[-\s]?[0-9]+[-\s]?[0-9X]/i);
         if (isbnMatch) {
-            handleIsbnFound(isbnMatch[0].replace(/[^0-9X]/gi, ''));
+            const extractedIsbn = isbnMatch[0].replace(/[^0-9X]/gi, '');
+            logDebug(`ISBN-13 with hyphens match: ${extractedIsbn}`, 'success');
+            handleIsbnFound(extractedIsbn);
             return;
         }
         
         // 4. Check for ISBN-10
         isbnMatch = rawData.match(/(?:ISBN(?:-10)?:?\s*)?(?=[0-9X]{10}$|(?=(?:[0-9]+[-\s]){3})[-\s0-9X]{13}$)[0-9]{1,5}[-\s]?[0-9]+[-\s]?[0-9]+[-\s]?[0-9X]/i);
         if (isbnMatch) {
-            handleIsbnFound(isbnMatch[0].replace(/[^0-9X]/gi, ''));
+            const extractedIsbn = isbnMatch[0].replace(/[^0-9X]/gi, '');
+            logDebug(`ISBN-10 match: ${extractedIsbn}`, 'success');
+            handleIsbnFound(extractedIsbn);
             return;
         }
         
         // 5. Try to extract any 10-13 digit number that could be an ISBN
         const digits = rawData.replace(/[^0-9]/g, '');
+        logDebug(`Extracted digits: ${digits}`, 'info');
+        
         for (let i = 0; i <= digits.length - 10; i++) {
             // Try ISBN-13
             if (i <= digits.length - 13) {
                 const potential13 = digits.substr(i, 13);
                 if (potential13.startsWith('978') || potential13.startsWith('979')) {
+                    logDebug(`Found potential ISBN-13: ${potential13}`, 'success');
                     handleIsbnFound(potential13);
                     return;
                 }
@@ -2248,23 +2328,28 @@ function initBarcodeScanner() {
             // Try ISBN-10
             const potential10 = digits.substr(i, 10);
             if (/^[0-9]{9}[0-9X]$/i.test(potential10)) {
+                logDebug(`Found potential ISBN-10: ${potential10}`, 'success');
                 handleIsbnFound(potential10);
                 return;
             }
         }
         
         // If we got this far, we couldn't extract an ISBN
+        logDebug("No ISBN pattern found in barcode data", 'warning');
         cameraStatus.textContent = "Barcode detected, but no ISBN found. Try again.";
     }
     
     // Handle when an ISBN is successfully found
     function handleIsbnFound(isbn) {
-        console.log('Valid ISBN found:', isbn);
+        logDebug(`Valid ISBN found: ${isbn}`, 'success');
         
         // Update the manual ISBN input field
         const isbnManualInput = document.getElementById('isbn-manual-input');
         if (isbnManualInput) {
             isbnManualInput.value = isbn;
+            logDebug(`Updated input field with ISBN: ${isbn}`, 'success');
+        } else {
+            logDebug("Could not find ISBN input field!", 'error');
         }
         
         cameraStatus.textContent = `ISBN detected: ${isbn}`;
@@ -2273,9 +2358,15 @@ function initBarcodeScanner() {
         stopCamera();
         
         // Trigger lookup
+        logDebug("Will trigger ISBN lookup in 1 second", 'info');
         setTimeout(() => {
             const lookupBtn = document.getElementById('isbn-lookup-btn');
-            if (lookupBtn) lookupBtn.click();
+            if (lookupBtn) {
+                logDebug("Clicking ISBN lookup button", 'info');
+                lookupBtn.click();
+            } else {
+                logDebug("Could not find ISBN lookup button!", 'error');
+            }
         }, 1000);
     }
 }
