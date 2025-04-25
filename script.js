@@ -2083,34 +2083,6 @@ function initBarcodeScanner() {
         });
     }
     
-    // Initialize quick ISBN button
-    const quickIsbnBtn = document.getElementById('quick-isbn-btn');
-    if (quickIsbnBtn) {
-        quickIsbnBtn.addEventListener('click', function() {
-            // Use the ISBN we can see in the image
-            const isbn = '9781786831965';
-            const isbnManualInput = document.getElementById('isbn-manual-input');
-            if (isbnManualInput) {
-                isbnManualInput.value = isbn;
-                logDebug(`Set ISBN from image: ${isbn}`, 'success');
-                
-                // Stop camera if running
-                if (cameraStream) {
-                    stopCamera();
-                }
-                
-                // Trigger lookup
-                setTimeout(() => {
-                    const lookupBtn = document.getElementById('isbn-lookup-btn');
-                    if (lookupBtn) {
-                        logDebug('Clicking lookup button', 'info');
-                        lookupBtn.click();
-                    }
-                }, 500);
-            }
-        });
-    }
-    
     // Helper function to log debug info
     function logDebug(message, type = 'info') {
         if (!debugOutput) return;
@@ -2135,7 +2107,7 @@ function initBarcodeScanner() {
     // Only use the container click to toggle camera
     cameraContainer.addEventListener('click', toggleCamera);
     
-    // Stop camera when modal is closed
+    // Stop camera when modal is closed or canceled
     const isbnInputContainer = document.getElementById('isbn-input-container');
     if (isbnInputContainer) {
         isbnInputContainer.addEventListener('click', function(e) {
@@ -2143,6 +2115,14 @@ function initBarcodeScanner() {
             if (e.target === isbnInputContainer) {
                 stopCamera();
             }
+        });
+    }
+    
+    // Also stop camera when cancel button is clicked
+    const cancelIsbnInputBtn = document.getElementById('cancel-isbn-input-btn');
+    if (cancelIsbnInputBtn) {
+        cancelIsbnInputBtn.addEventListener('click', function() {
+            stopCamera();
         });
     }
     
@@ -2418,17 +2398,15 @@ function initBarcodeScanner() {
         // Stop camera
         stopCamera();
         
-        // Trigger lookup
-        logDebug("Will trigger ISBN lookup in 1 second", 'info');
-        setTimeout(() => {
-            const lookupBtn = document.getElementById('isbn-lookup-btn');
-            if (lookupBtn) {
-                logDebug("Clicking ISBN lookup button", 'info');
-                lookupBtn.click();
-            } else {
-                logDebug("Could not find ISBN lookup button!", 'error');
-            }
-        }, 1000);
+        // Trigger lookup immediately
+        logDebug("Triggering ISBN lookup now", 'info');
+        const lookupBtn = document.getElementById('isbn-lookup-btn');
+        if (lookupBtn) {
+            logDebug("Clicking ISBN lookup button", 'info');
+            lookupBtn.click();
+        } else {
+            logDebug("Could not find ISBN lookup button!", 'error');
+        }
     }
 }
 
