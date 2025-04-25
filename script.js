@@ -2226,9 +2226,17 @@ function initBarcodeScanner() {
         cameraStatus.textContent = 'Processing image...';
         
         try {
+            // Make canvas visible for debugging (can be hidden in production)
+            canvasElem.removeAttribute('hidden');
+            
             // Set canvas dimensions to match video
-            canvasElem.width = videoElem.videoWidth;
-            canvasElem.height = videoElem.videoHeight;
+            canvasElem.width = videoElem.videoWidth || 640;
+            canvasElem.height = videoElem.videoHeight || 480;
+            
+            // Check if video dimensions are valid
+            if (canvasElem.width === 0 || canvasElem.height === 0) {
+                throw new Error("Invalid video dimensions: " + canvasElem.width + "x" + canvasElem.height);
+            }
             
             // Draw the current video frame to the canvas
             const ctx = canvasElem.getContext('2d');
@@ -2251,22 +2259,29 @@ function initBarcodeScanner() {
                 0, 0, targetWidth, targetHeight
             );
             
-            // Convert target canvas to data URL for debugging/display if needed
-            const dataUrl = targetCanvas.toDataURL('image/jpeg', 0.8);
-            
             // Get image data from target canvas for processing
             const imageData = targetCtx.getImageData(0, 0, targetWidth, targetHeight);
             
             debug(`Processing image: ${targetWidth}x${targetHeight}`);
             
-            // First check if we can detect a barcode pattern
+            // Always show manual entry option - even if barcode detection fails
+            tryManualIsbnExtraction();
+            
+            // Check if we can detect a barcode pattern
             const hasBarcode = detectBarcodeInImage(imageData);
             
             if (hasBarcode) {
                 debug('Barcode pattern detected, attempting to decode...');
+                cameraStatus.textContent = 'Barcode detected! Enter ISBN below if automatic scanning fails.';
                 
                 // Try to decode with ZXing library
                 try {
+                    // Ensure the ZXing reader exists
+                    if (!window.reader) {
+                        debug('ZXing reader not initialized');
+                        return;
+                    }
+                    
                     const result = window.reader.decode(imageData.data, imageData.width, imageData.height);
                     if (result && result.text) {
                         debug('ZXing decoded: ' + result.text);
@@ -2280,18 +2295,18 @@ function initBarcodeScanner() {
                         debug('ZXing library error - check if properly loaded');
                     }
                 }
-                
-                // If ZXing fails but we detected a barcode pattern, ask for manual entry
-                tryManualIsbnExtraction();
             } else {
-                cameraStatus.textContent = 'No barcode detected. Try again.';
+                cameraStatus.textContent = 'No barcode detected. Try again or enter manually.';
                 debug('No barcode detected in image');
             }
             
         } catch (error) {
             console.error('Error processing captured image:', error);
-            cameraStatus.textContent = 'Error processing image';
+            cameraStatus.textContent = 'Error processing image. Try entering ISBN manually.';
             debug('Image processing error: ' + error.message);
+            
+            // Always provide manual option on error
+            tryManualIsbnExtraction();
         }
     }
     
@@ -2363,7 +2378,8 @@ function initBarcodeScanner() {
     function tryManualIsbnExtraction() {
         debug('Asking for manual ISBN input');
         createQuickIsbnButton();
-        cameraStatus.textContent = 'Barcode found! Enter visible ISBN below';
+        // Update status message with clearer instructions
+        cameraStatus.textContent = 'ISBN entry available below. You can keep scanning or enter manually.';
     }
     
     // Function to create a quick banner with a button for the user to enter an ISBN
@@ -2378,32 +2394,45 @@ function initBarcodeScanner() {
         const banner = document.createElement('div');
         banner.className = 'quick-isbn-entry';
         banner.style.position = 'absolute';
-        banner.style.bottom = '100px';
+        banner.style.bottom = '80px';
         banner.style.left = '0';
         banner.style.right = '0';
-        banner.style.padding = '10px';
-        banner.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
+        banner.style.padding = '15px';
+        banner.style.backgroundColor = 'rgba(255, 255, 255, 0.95)';
         banner.style.zIndex = '20';
         banner.style.display = 'flex';
         banner.style.flexDirection = 'column';
         banner.style.alignItems = 'center';
         banner.style.justifyContent = 'center';
-        banner.style.gap = '10px';
+        banner.style.gap = '12px';
+        banner.style.borderTop = '3px solid #FF6B92';
+        banner.style.boxShadow = '0 -2px 10px rgba(0,0,0,0.2)';
+        
+        // Add a title/instructions
+        const instructions = document.createElement('p');
+        instructions.textContent = 'Enter the ISBN from the barcode';
+        instructions.style.margin = '0';
+        instructions.style.fontWeight = 'bold';
+        instructions.style.color = '#1C1C1E';
         
         // Add an input field for the ISBN
         const input = document.createElement('input');
         input.type = 'text';
-        input.placeholder = 'Enter visible ISBN from image';
+        input.placeholder = 'e.g., 9781234567890';
         input.style.width = '90%';
-        input.style.padding = '8px';
-        input.style.borderRadius = '4px';
+        input.style.padding = '12px';
+        input.style.borderRadius = '8px';
         input.style.border = '1px solid #ccc';
+        input.style.fontSize = '16px';
+        input.inputMode = 'numeric';
         
         // Add a button to use this ISBN
         const button = document.createElement('button');
-        button.textContent = 'Use This ISBN';
-        button.className = 'btn btn-outline';
+        button.textContent = 'Look Up This ISBN';
+        button.className = 'btn-primary';
         button.style.margin = '0';
+        button.style.width = '90%';
+        button.style.padding = '12px';
         
         // On button click, set the ISBN and trigger lookup
         button.addEventListener('click', () => {
@@ -2411,6 +2440,11 @@ function initBarcodeScanner() {
             if (isbn) {
                 debug('Using manually entered ISBN: ' + isbn);
                 handleIsbnFound(isbn);
+            } else {
+                input.style.borderColor = 'red';
+                setTimeout(() => {
+                    input.style.borderColor = '#ccc';
+                }, 2000);
             }
         });
         
@@ -2422,6 +2456,7 @@ function initBarcodeScanner() {
         });
         
         // Add elements to the banner
+        banner.appendChild(instructions);
         banner.appendChild(input);
         banner.appendChild(button);
         
