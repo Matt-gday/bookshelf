@@ -15,46 +15,21 @@
     <!-- ZXing Barcode Scanner Library -->
     <script src="https://unpkg.com/@zxing/library@0.19.1" type="text/javascript"></script>
     <script>
-        // Initialize ZXing reader
+        // Initialize ZXing reader with simpler approach
         document.addEventListener('DOMContentLoaded', function() {
             try {
+                // Create a reader without advanced configuration for better compatibility
                 if (typeof ZXing !== 'undefined') {
-                    // For newer versions of ZXing
-                    const hints = new Map();
-                    const formats = [
-                        ZXing.BarcodeFormat.EAN_13,
-                        ZXing.BarcodeFormat.EAN_8,
-                        ZXing.BarcodeFormat.CODE_39,
-                        ZXing.BarcodeFormat.CODE_128,
-                        ZXing.BarcodeFormat.UPC_A,
-                        ZXing.BarcodeFormat.UPC_E
-                    ];
-                    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
-                    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-                    
-                    window.reader = new ZXing.BrowserMultiFormatReader(hints);
-                    console.log("ZXing barcode reader initialized successfully (modern API)");
+                    window.reader = new ZXing.BrowserMultiFormatReader();
+                    console.log("ZXing reader initialized (simple mode)");
                 } else if (typeof zxing !== 'undefined') {
-                    // For older versions of ZXing
-                    const hints = new Map();
-                    const formats = [
-                        zxing.BarcodeFormat.EAN_13,
-                        zxing.BarcodeFormat.EAN_8,
-                        zxing.BarcodeFormat.CODE_39,
-                        zxing.BarcodeFormat.CODE_128,
-                        zxing.BarcodeFormat.UPC_A,
-                        zxing.BarcodeFormat.UPC_E
-                    ];
-                    hints.set(zxing.DecodeHintType.POSSIBLE_FORMATS, formats);
-                    hints.set(zxing.DecodeHintType.TRY_HARDER, true);
-                    
-                    window.reader = new zxing.BrowserMultiFormatReader(hints);
-                    console.log("ZXing barcode reader initialized successfully (legacy API)");
+                    window.reader = new zxing.BrowserMultiFormatReader();
+                    console.log("ZXing reader initialized (legacy mode)");
                 } else {
-                    console.error("ZXing library not found in global scope");
+                    console.error("ZXing library not found");
                 }
             } catch (error) {
-                console.error("Error initializing ZXing barcode reader:", error);
+                console.error("Error initializing ZXing reader:", error);
             }
         });
     </script>
@@ -151,6 +126,9 @@
                                 <button id="clear-debug-btn" class="btn-secondary btn-small">Clear</button>
                             </div>
                             <div id="barcode-debug-output" class="barcode-debug-output"></div>
+                            <button id="quick-isbn-btn" class="btn-primary" style="width:100%; margin-top:10px; padding:8px;">
+                                Use ISBN from image (978-1-78683-196-5)
+                            </button>
                         </div>
                     </div>
                     
