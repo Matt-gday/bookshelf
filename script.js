@@ -2231,234 +2231,349 @@ function initBarcodeScanner() {
         debug('Camera stopped');
     }
     
-    // Function to capture and scan a single image
+    // Function to capture and scan the current frame
     function captureAndScanImage() {
-        if (!videoActive) {
-            cameraStatus.textContent = 'Camera not active. Please wait...';
+        if (!videoElement || videoElement.paused || videoElement.ended) {
+            console.error('Video not available for capture');
             return;
         }
         
-        // Check if video is ready
-        if (!videoElem.videoWidth || !videoElem.videoHeight) {
-            cameraStatus.textContent = 'Camera not ready yet. Please wait a moment and try again.';
-            console.error('Video dimensions not available yet');
-            return;
-        }
+        const canvas = document.getElementById('camera-canvas');
+        const context = canvas.getContext('2d');
         
-        // Flash effect for feedback
-        const flashElement = document.createElement('div');
-        flashElement.style.position = 'absolute';
-        flashElement.style.top = '0';
-        flashElement.style.left = '0';
-        flashElement.style.width = '100%';
-        flashElement.style.height = '100%';
-        flashElement.style.backgroundColor = 'white';
-        flashElement.style.opacity = '0.8';
-        flashElement.style.zIndex = '50';
-        flashElement.style.transition = 'opacity 0.5s ease-out';
-        cameraContainer.appendChild(flashElement);
+        // Set canvas dimensions to match video
+        canvas.width = videoElement.videoWidth;
+        canvas.height = videoElement.videoHeight;
         
-        // Make the flash fade out
-        setTimeout(() => {
-            flashElement.style.opacity = '0';
-            setTimeout(() => flashElement.remove(), 500);
-        }, 100);
+        // Draw video frame to canvas
+        context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
         
-        cameraStatus.textContent = 'Processing image...';
+        // Make canvas visible and larger
+        canvas.style.display = 'block';
+        canvas.style.width = '100%';
+        canvas.style.maxWidth = '400px';
+        canvas.style.height = 'auto';
+        canvas.style.margin = '0 auto';
+        canvas.style.border = '1px solid #ddd';
+        
+        // Stop the video to show the captured image
+        stopVideo();
+        
+        // Get image data for processing
+        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+        
+        // Always show raw scan debug
+        const barcodeDetected = showRawScanDebug(imageData);
+        
+        console.log('Captured image, scanning for barcode...');
+        
+        // Get or create debug info element once
+        const debugInfo = document.getElementById('camera-debug-info');
         
         try {
-            // Make canvas visible for debugging (can be hidden in production)
-            canvasElem.removeAttribute('hidden');
-            canvasElem.style.display = 'block';
-            canvasElem.style.position = 'absolute';
-            canvasElem.style.top = '0';
-            canvasElem.style.left = '0';
-            canvasElem.style.width = '100%';
-            canvasElem.style.height = '100%';
-            canvasElem.style.objectFit = 'contain';
-            canvasElem.style.zIndex = '5';
-            canvasElem.style.opacity = '0.3'; // Make it semi-transparent so we can see through it
-            
-            // Set canvas dimensions to match video
-            canvasElem.width = videoElem.videoWidth || 640;
-            canvasElem.height = videoElem.videoHeight || 480;
-            
-            // Check if video dimensions are valid
-            if (canvasElem.width === 0 || canvasElem.height === 0) {
-                throw new Error("Invalid video dimensions: " + canvasElem.width + "x" + canvasElem.height);
-            }
-            
-            // Draw the current video frame to the canvas
-            const ctx = canvasElem.getContext('2d');
-            ctx.drawImage(videoElem, 0, 0, canvasElem.width, canvasElem.height);
-            
-            // Get image data for the target area - using the position of scan guide
-            const targetWidth = Math.round(canvasElem.width * 0.6);  // 60% of width
-            const targetHeight = Math.round(canvasElem.height * 0.25); // 25% of height
-            const targetX = Math.round((canvasElem.width - targetWidth) / 2);
-            const targetY = Math.round((canvasElem.height - targetHeight) / 2);
-            
-            // Create a smaller canvas just for the target area
-            const targetCanvas = document.createElement('canvas');
-            targetCanvas.width = targetWidth;
-            targetCanvas.height = targetHeight;
-            const targetCtx = targetCanvas.getContext('2d');
-            targetCtx.drawImage(
-                canvasElem, 
-                targetX, targetY, targetWidth, targetHeight,
-                0, 0, targetWidth, targetHeight
-            );
-            
-            // Get image data from target canvas for processing
-            const imageData = targetCtx.getImageData(0, 0, targetWidth, targetHeight);
-            
-            debug(`Processing image: ${targetWidth}x${targetHeight}`);
-            
-            // Always show manual entry option - even if barcode detection fails
-            tryManualIsbnExtraction();
-            
-            // Check if we can detect a barcode pattern
-            const hasBarcode = detectBarcodeInImage(imageData);
-            
-            if (hasBarcode) {
-                debug('Barcode pattern detected, attempting to decode...');
-                cameraStatus.textContent = 'Barcode detected! Enter ISBN below if automatic scanning fails.';
+            // Try to decode with ZXing
+            if (window.reader) {
+                const result = window.reader.decode(imageData.data, imageData.width, imageData.height);
+                console.log('ZXing decode result:', result);
                 
-                // Try to decode with ZXing library
-                try {
-                    // Ensure the ZXing reader exists
-                    if (!window.reader) {
-                        // Try to initialize it here as a fallback
-                        if (typeof ZXing !== 'undefined') {
-                            window.reader = new ZXing.BrowserMultiFormatReader();
-                            console.log("ZXing reader initialized on-demand (simple mode)");
-                        } else if (typeof zxing !== 'undefined') {
-                            window.reader = new zxing.BrowserMultiFormatReader();
-                            console.log("ZXing reader initialized on-demand (legacy mode)");
-                        } else {
-                            debug('ZXing library not available');
-                            cameraStatus.textContent = 'Barcode scanner not available. Please enter ISBN manually.';
-                            return;
-                        }
+                if (result && result.text) {
+                    // Update debug info with successful decode
+                    if (debugInfo) {
+                        const decodeResult = document.createElement('p');
+                        decodeResult.innerHTML = `<strong>ZXing decode result:</strong> ${result.text}`;
+                        decodeResult.style.color = 'green';
+                        debugInfo.appendChild(decodeResult);
                     }
                     
-                    // SIMPLIFIED APPROACH: Try with three different methods in sequence
-                    let result = null;
-                    
-                    // Method 1: Direct decode of full frame
-                    try {
-                        const fullImageData = ctx.getImageData(0, 0, canvasElem.width, canvasElem.height);
-                        result = window.reader.decode(fullImageData.data, fullImageData.width, fullImageData.height);
-                        debug('Successfully decoded full frame barcode');
-                    } catch (e) {
-                        debug('Full frame decode failed: ' + e.message);
-                    }
-                    
-                    // Method 2: If that fails, try the target area with enhanced contrast
-                    if (!result) {
-                        try {
-                            // Create enhanced version with better contrast
-                            const targetCtx = targetCanvas.getContext('2d');
-                            targetCtx.filter = 'contrast(1.8) brightness(1.1)';
-                            targetCtx.drawImage(
-                                canvasElem, 
-                                targetX, targetY, targetWidth, targetHeight,
-                                0, 0, targetWidth, targetHeight
-                            );
-                            
-                            // Show the target canvas for debugging
-                            targetCanvas.style.position = 'absolute';
-                            targetCanvas.style.top = '10px';
-                            targetCanvas.style.left = '10px';
-                            targetCanvas.style.border = '2px solid red';
-                            targetCanvas.style.zIndex = '100';
-                            targetCanvas.style.width = '80px';
-                            targetCanvas.style.height = '40px';
-                            cameraContainer.appendChild(targetCanvas);
-                            
-                            const enhancedImageData = targetCtx.getImageData(0, 0, targetWidth, targetHeight);
-                            result = window.reader.decode(enhancedImageData.data, enhancedImageData.width, enhancedImageData.height);
-                            debug('Successfully decoded enhanced target area barcode');
-                        } catch (e) {
-                            debug('Enhanced target area decode failed: ' + e.message);
-                        }
-                    }
-                    
-                    // Method 3: If both fail, try the target area with inverted colors
-                    if (!result) {
-                        try {
-                            const targetCtx = targetCanvas.getContext('2d');
-                            targetCtx.filter = 'invert(100%) contrast(1.2)';
-                            targetCtx.drawImage(
-                                canvasElem, 
-                                targetX, targetY, targetWidth, targetHeight,
-                                0, 0, targetWidth, targetHeight
-                            );
-                            const invertedImageData = targetCtx.getImageData(0, 0, targetWidth, targetHeight);
-                            result = window.reader.decode(invertedImageData.data, invertedImageData.width, invertedImageData.height);
-                            debug('Successfully decoded inverted target area barcode');
-                        } catch (e) {
-                            debug('Inverted target area decode failed: ' + e.message);
-                        }
-                    }
-                    
-                    // Process the result if we got one
-                    if (result && result.text) {
-                        debug('ZXing decoded: ' + result.text);
-                        processCodeData(result.text);
-                        return;
-                    } else {
-                        debug('ZXing decoder did not return a result');
-                        cameraStatus.textContent = 'Barcode detected but could not read. Try entering manually.';
-                    }
-                } catch (decodeError) {
-                    debug('ZXing decode error: ' + decodeError.message);
-                    // If it's a TypeError, the ZXing library might not be available
-                    if (decodeError instanceof TypeError) {
-                        debug('ZXing library error - check if properly loaded');
-                    }
+                    processCodeData(result.text);
+                    return;
                 }
-            } else {
-                cameraStatus.textContent = 'No barcode detected. Try again or enter manually.';
-                debug('No barcode detected in image');
+            }
+        } catch (error) {
+            console.error('ZXing decode error:', error);
+            
+            // Update debug info with error
+            if (debugInfo) {
+                const errorInfo = document.createElement('p');
+                errorInfo.innerHTML = `<strong>ZXing error:</strong> ${error.message}`;
+                errorInfo.style.color = 'red';
+                debugInfo.appendChild(errorInfo);
             }
             
-        } catch (error) {
-            console.error('Error processing captured image:', error);
-            cameraStatus.textContent = 'Error processing image. Try entering ISBN manually.';
-            debug('Image processing error: ' + error.message);
-            
-            // Always provide manual option on error
+            if (error instanceof TypeError) {
+                // Handle specific error type
+                console.log('TypeError in ZXing decode, falling back to manual detection');
+            }
+        }
+        
+        // If barcode detected but ZXing failed, try manual extraction
+        if (barcodeDetected) {
             tryManualIsbnExtraction();
+        } else {
+            console.log('No barcode detected in image');
+            
+            // Update the debug info with a message
+            if (debugInfo) {
+                const noBarcode = document.createElement('p');
+                noBarcode.textContent = 'No barcode detected. Try taking another picture with better lighting and alignment.';
+                noBarcode.style.fontWeight = 'bold';
+                debugInfo.appendChild(noBarcode);
+            }
+            
+            // Add a retry button
+            const retryBtn = document.createElement('button');
+            retryBtn.textContent = 'Retry Scan';
+            retryBtn.className = 'btn btn-primary mt-2';
+            retryBtn.onclick = function() {
+                startVideo();
+                canvas.style.display = 'none';
+                if (debugInfo) {
+                    debugInfo.style.display = 'none';
+                }
+            };
+            
+            if (debugInfo) {
+                debugInfo.appendChild(retryBtn);
+            }
+        }
+    }
+    
+    // Function to show raw scan debug information with enhanced visualization
+    function showRawScanDebug(imageData) {
+        const width = imageData.width;
+        const height = imageData.height;
+        const data = imageData.data;
+        
+        // Create or get the debug info element
+        let debugElement = document.getElementById('barcode-debug-info');
+        if (!debugElement) {
+            debugElement = document.createElement('div');
+            debugElement.id = 'barcode-debug-info';
+            debugElement.style.fontFamily = 'monospace';
+            debugElement.style.fontSize = '12px';
+            debugElement.style.marginTop = '10px';
+            debugElement.style.padding = '10px';
+            debugElement.style.backgroundColor = '#f0f0f0';
+            debugElement.style.borderRadius = '5px';
+            debugElement.style.overflow = 'auto';
+            debugElement.style.maxHeight = '500px';
+            
+            const debugArea = document.getElementById('debug-area');
+            if (debugArea) {
+                debugArea.appendChild(debugElement);
+            } else {
+                document.body.appendChild(debugElement);
+            }
+        }
+        
+        // Clear previous debug info
+        debugElement.innerHTML = '';
+        
+        // Add title and image dimensions
+        const titleEl = document.createElement('h4');
+        titleEl.textContent = 'Barcode Scan Debug';
+        titleEl.style.margin = '0 0 10px 0';
+        debugElement.appendChild(titleEl);
+        
+        const dimensionsEl = document.createElement('p');
+        dimensionsEl.textContent = `Image dimensions: ${width}x${height}`;
+        debugElement.appendChild(dimensionsEl);
+        
+        // Visualize the middle line of the image data
+        const visualizationEl = document.createElement('div');
+        visualizationEl.innerHTML = '<h5>Middle Row Visualization</h5>';
+        visualizationEl.innerHTML += '<p>Each block represents brightness level (darker = black pixel, lighter = white pixel)</p>';
+        visualizationEl.innerHTML += '<p>A barcode should appear as alternating dark/light bands</p>';
+        
+        const middleY = Math.floor(height / 2);
+        const sampleSection = document.createElement('div');
+        sampleSection.style.display = 'flex';
+        sampleSection.style.overflowX = 'auto';
+        sampleSection.style.height = '25px';
+        sampleSection.style.marginBottom = '10px';
+        
+        // Sample every few pixels to keep the visualization reasonable
+        const visualStep = Math.max(1, Math.floor(width / 200));
+        
+        for (let x = 0; x < width; x += visualStep) {
+            const pixelOffset = (middleY * width + x) * 4;
+            const r = data[pixelOffset];
+            const g = data[pixelOffset + 1];
+            const b = data[pixelOffset + 2];
+            const brightness = (r + g + b) / 3;
+            
+            const block = document.createElement('div');
+            block.style.width = '3px';
+            block.style.height = '100%';
+            block.style.backgroundColor = `rgb(${brightness}, ${brightness}, ${brightness})`;
+            sampleSection.appendChild(block);
+        }
+        
+        visualizationEl.appendChild(sampleSection);
+        debugElement.appendChild(visualizationEl);
+        
+        // Count transitions across multiple lines to detect barcode
+        const transitionTableEl = document.createElement('div');
+        transitionTableEl.innerHTML = '<h5>Transition Analysis</h5>';
+        transitionTableEl.innerHTML += '<p>Counting transitions between dark/bright pixels across multiple lines:</p>';
+        
+        const rowsToSample = 7;
+        const rowSpacing = Math.floor(height / (rowsToSample + 1));
+        
+        const table = document.createElement('table');
+        table.style.borderCollapse = 'collapse';
+        table.style.width = '100%';
+        
+        // Table header
+        const thead = document.createElement('thead');
+        thead.innerHTML = `
+            <tr>
+                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Line #</th>
+                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Position (y)</th>
+                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Transitions</th>
+                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Result</th>
+            </tr>
+        `;
+        table.appendChild(thead);
+        
+        const tbody = document.createElement('tbody');
+        let totalTransitions = 0;
+        let detectedInAnyRow = false;
+        
+        for (let sampleIndex = 0; sampleIndex < rowsToSample; sampleIndex++) {
+            const y = (sampleIndex + 1) * rowSpacing;
+            
+            // Count transitions
+            let transitions = 0;
+            let lastBright = null;
+            const sampleStep = 2;
+            
+            for (let x = 0; x < width; x += sampleStep) {
+                const pixelOffset = (y * width + x) * 4;
+                const r = data[pixelOffset];
+                const g = data[pixelOffset + 1];
+                const b = data[pixelOffset + 2];
+                const brightness = (r + g + b) / 3;
+                
+                const isBright = brightness > 127;
+                
+                if (lastBright !== null && isBright !== lastBright) {
+                    transitions++;
+                }
+                
+                lastBright = isBright;
+            }
+            
+            totalTransitions += transitions;
+            const isBarcode = transitions > 30;
+            if (isBarcode) detectedInAnyRow = true;
+            
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td style="border: 1px solid #ddd; padding: 8px;">${sampleIndex + 1}</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">${y}</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">${transitions}</td>
+                <td style="border: 1px solid #ddd; padding: 8px; color: ${isBarcode ? 'green' : 'red'}">
+                    ${isBarcode ? '✓ DETECTED' : '✗ NOT DETECTED'}
+                </td>
+            `;
+            
+            tbody.appendChild(tr);
+        }
+        
+        table.appendChild(tbody);
+        transitionTableEl.appendChild(table);
+        
+        // Add summary
+        const avgTransitions = totalTransitions / rowsToSample;
+        const summaryEl = document.createElement('p');
+        summaryEl.innerHTML = `<strong>Average transitions per row:</strong> ${avgTransitions.toFixed(1)}<br>`;
+        summaryEl.innerHTML += `<strong>Final result:</strong> <span style="color: ${detectedInAnyRow || avgTransitions > 25 ? 'green' : 'red'}; font-weight: bold;">
+            ${detectedInAnyRow || avgTransitions > 25 ? 'BARCODE DETECTED' : 'NO BARCODE DETECTED'}
+        </span>`;
+        
+        transitionTableEl.appendChild(summaryEl);
+        debugElement.appendChild(transitionTableEl);
+        
+        // Return if we detected a barcode
+        return detectedInAnyRow || avgTransitions > 25;
+    }
+    
+    // Stop video stream but keep UI elements
+    function stopVideo() {
+        // Stop the actual video stream
+        if (video && video.srcObject) {
+            const tracks = video.srcObject.getTracks();
+            tracks.forEach(track => track.stop());
+            video.srcObject = null;
+        }
+    }
+    
+    // Function to create the debug info element if it doesn't exist
+    function createDebugInfoElement() {
+        const debugInfo = document.createElement('div');
+        debugInfo.id = 'camera-debug-info';
+        debugInfo.className = 'camera-debug-info';
+        debugInfo.style.width = '100%';
+        debugInfo.style.marginTop = '15px';
+        debugInfo.style.padding = '10px';
+        debugInfo.style.backgroundColor = '#f8f9fa';
+        debugInfo.style.border = '1px solid #ddd';
+        debugInfo.style.borderRadius = '4px';
+        debugInfo.style.fontSize = '14px';
+        
+        // Find where to append the debug element
+        const cameraContainer = document.getElementById('camera-container');
+        if (cameraContainer) {
+            cameraContainer.appendChild(debugInfo);
+        } else {
+            // Fallback to appending to the modal content
+            const modalContent = document.querySelector('.camera-modal-content');
+            if (modalContent) {
+                modalContent.appendChild(debugInfo);
+            }
+        }
+        
+        return debugInfo;
+    }
+    
+    // Helper function to log debug messages to the debug info element
+    function debugLog(message, targetElement = null) {
+        console.log(message);
+        
+        // Log to debug panel if available
+        const debugElement = targetElement || document.getElementById('camera-debug-info');
+        if (debugElement) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.innerHTML = `<span class="text-secondary">[${timestamp}]</span> ${message}`;
+            debugElement.appendChild(logEntry);
+            debugElement.scrollTop = debugElement.scrollHeight; // Auto-scroll to bottom
         }
     }
     
     // Function to attempt to detect barcode patterns in an image
     function detectBarcodeInImage(imageData) {
-        // Simple detection heuristic looking for high contrast horizontal lines
-        // This is a basic approach and can be improved
-        
-        // Sample horizontal lines from the middle of the image 
         const width = imageData.width;
         const height = imageData.height;
         const data = imageData.data;
         
-        // We'll check 5 horizontal lines evenly distributed across the middle third
-        const startY = Math.floor(height * 0.33);
-        const endY = Math.floor(height * 0.66);
-        const numLines = 5;
-        const lineSpacing = Math.floor((endY - startY) / (numLines - 1));
+        // Sample multiple rows across the image for better detection
+        const rowsToSample = 7;
+        const rowSpacing = Math.floor(height / (rowsToSample + 1));
         
-        let barcodeDetected = false;
+        let detectedInAnyRow = false;
         let totalTransitions = 0;
         
-        for (let i = 0; i < numLines; i++) {
-            const y = startY + (i * lineSpacing);
+        // For each sample row
+        for (let sampleIndex = 0; sampleIndex < rowsToSample; sampleIndex++) {
+            const y = (sampleIndex + 1) * rowSpacing; // evenly space the rows
+            
             // Count transitions between dark and bright along this line
             let transitions = 0;
             let lastBright = null;
             
-            // Sample every few pixels to speed up processing
+            // Sample every few pixels to speed up processing but maintain accuracy
             const sampleStep = 2;
             
             for (let x = 0; x < width; x += sampleStep) {
@@ -2483,26 +2598,54 @@ function initBarcodeScanner() {
             totalTransitions += transitions;
             
             // Heuristic: A barcode typically has many dark/light transitions
-            // The number depends on barcode type and density
             if (transitions > 30) {
-                barcodeDetected = true;
+                detectedInAnyRow = true;
+                console.log(`Barcode detected in row ${sampleIndex + 1} (y=${y}) with ${transitions} transitions`);
             }
-            
-            debug(`Line ${i+1}: ${transitions} transitions`);
         }
         
-        debug(`Average transitions per line: ${totalTransitions / numLines}`);
+        // Calculate average transitions per row
+        const avgTransitions = totalTransitions / rowsToSample;
+        console.log(`Average transitions per row: ${avgTransitions.toFixed(1)}`);
         
-        // If at least 3 of the lines had high transitions, consider it a barcode
-        return barcodeDetected;
+        // If barcode was detected in any row, or if the average transitions are high enough
+        const detected = detectedInAnyRow || avgTransitions > 25;
+        console.log(`Final barcode detection result: ${detected ? 'FOUND' : 'NOT FOUND'}`);
+        
+        return detected;
     }
     
     // Function to ask user to manually input the ISBN they see
     function tryManualIsbnExtraction() {
         debug('Asking for manual ISBN input');
+        
+        // Display a helpful message in the debug area
+        const debugInfo = document.getElementById('camera-debug-info') || createDebugInfoElement();
+        
+        // Add a header to the debug area if it doesn't have one already
+        if (!debugInfo.querySelector('h4')) {
+            const header = document.createElement('h4');
+            header.textContent = 'Manual ISBN Entry';
+            header.style.marginTop = '15px';
+            debugInfo.appendChild(header);
+        }
+        
+        // Add instructions
+        const instructions = document.createElement('p');
+        instructions.textContent = 'The barcode was detected but could not be decoded automatically. Please enter the ISBN number you can see on the barcode.';
+        instructions.style.marginBottom = '10px';
+        debugInfo.appendChild(instructions);
+        
+        // Create the quick ISBN button for easy entry
         createQuickIsbnButton();
+        
         // Update status message with clearer instructions
-        cameraStatus.textContent = 'ISBN entry available below. You can keep scanning or enter manually.';
+        if (cameraStatus) {
+            cameraStatus.textContent = 'ISBN scan failed. Please enter the ISBN you see in the image.';
+        }
+        
+        // Add restart button as well
+        addRestartButton();
     }
     
     // Function to create a quick banner with a button for the user to enter an ISBN
@@ -2591,66 +2734,108 @@ function initBarcodeScanner() {
     }
     
     // Process data from scanned code
-    function processCodeData(rawData) {
-        debug('Processing code data: ' + rawData);
-        
-        // Log the raw data to console for debugging
-        console.log('Raw scanned data:', rawData);
-        
-        // Clean up the scanned data - remove whitespace and non-alphanumeric characters
-        const cleanedData = rawData.replace(/\s+/g, '').replace(/[^a-zA-Z0-9]/g, '');
-        console.log('Cleaned data:', cleanedData);
-        
-        // SIMPLIFIED APPROACH: First directly check if the data is an EAN-13 that starts with 978/979
-        if (/^(978|979)\d{10}$/.test(cleanedData)) {
-            // This is an ISBN-13 in EAN format - use it directly!
-            const isbn = cleanedData;
-            debug('Found ISBN-13 in EAN format: ' + isbn);
-            handleIsbnFound(isbn);
+    function processCodeData(codeData) {
+        if (!codeData) {
+            debugLog('❌ No code data provided');
             return;
         }
         
-        // Check for a 10-digit ISBN without prefix
-        if (/^\d{9}[\dX]$/.test(cleanedData)) {
-            const isbn = cleanedData;
-            debug('Found ISBN-10: ' + isbn);
-            handleIsbnFound(isbn);
-            return;
-        }
+        // Always show the raw scanned data
+        debugLog('──────────────────────────');
+        debugLog(`RAW SCANNED DATA: "${codeData}"`);
+        debugLog('──────────────────────────');
         
-        // If the data is longer, try to extract an ISBN pattern from it
-        const isbn13Match = cleanedData.match(/(978|979)\d{10}/);
-        if (isbn13Match) {
-            const isbn = isbn13Match[0];
-            debug('Extracted ISBN-13 from longer string: ' + isbn);
-            handleIsbnFound(isbn);
-            return;
-        }
-        
-        const isbn10Match = cleanedData.match(/\d{9}[\dX]/);
-        if (isbn10Match) {
-            const isbn = isbn10Match[0];
-            debug('Extracted ISBN-10 from longer string: ' + isbn);
-            handleIsbnFound(isbn);
-            return;
-        }
-        
-        // If we still don't have an ISBN, try the old patterns as fallback
-        let isbn = null;
-        
-        // Pattern for direct ISBN match (with "ISBN:" prefix)
-        const isbnLabelMatch = rawData.match(/ISBN[:\-]?\s*(97[89]\d{10}|\d{9}[\dX])/i);
-        if (isbnLabelMatch) {
-            isbn = isbnLabelMatch[1].replace(/[^0-9X]/gi, '');
-            debug('Found ISBN with label: ' + isbn);
-            handleIsbnFound(isbn);
-            return;
-        }
-        
-        // If nothing worked, ask for manual entry
-        debug('No ISBN pattern found in: ' + rawData);
-        cameraStatus.textContent = 'Barcode detected but no ISBN found. Please enter manually.';
+        // Always show the "use what you see" option regardless of detection success
         tryManualIsbnExtraction();
+        
+        // Clean the data - remove whitespace and non-alphanumeric characters
+        // while preserving X (valid in ISBN-10)
+        let cleanedData = codeData.replace(/\s+/g, '').replace(/[^0-9X]/gi, '');
+        debugLog(`Cleaned data: "${cleanedData}"`);
+        
+        // Check exact ISBN-13 match (13 digits)
+        const isbn13Pattern = /^(\d{13})$/;
+        const isbn13Match = cleanedData.match(isbn13Pattern);
+        
+        if (isbn13Match) {
+            const isbn13 = isbn13Match[1];
+            debugLog(`✓ Valid ISBN-13 format detected: ${isbn13}`);
+            handleIsbnFound(isbn13);
+            return;
+        } else {
+            debugLog('❌ Not a direct ISBN-13 match');
+        }
+        
+        // Check exact ISBN-10 match (10 digits, possibly ending with X)
+        const isbn10Pattern = /^(\d{9}[\dX])$/i;
+        const isbn10Match = cleanedData.match(isbn10Pattern);
+        
+        if (isbn10Match) {
+            const isbn10 = isbn10Match[1];
+            debugLog(`✓ Valid ISBN-10 format detected: ${isbn10}`);
+            handleIsbnFound(isbn10);
+            return;
+        } else {
+            debugLog('❌ Not a direct ISBN-10 match');
+        }
+        
+        // Try to extract an ISBN pattern from a longer string
+        debugLog('Attempting to extract ISBN pattern from longer string...');
+        
+        // Look for ISBN-13 pattern within longer string
+        const embeddedIsbn13Pattern = /(\d{13})/;
+        const embeddedIsbn13Match = codeData.match(embeddedIsbn13Pattern);
+        
+        if (embeddedIsbn13Match) {
+            const potentialIsbn13 = embeddedIsbn13Match[1];
+            debugLog(`✓ Found potential ISBN-13 within string: ${potentialIsbn13}`);
+            handleIsbnFound(potentialIsbn13);
+            return;
+        } else {
+            debugLog('❌ No embedded ISBN-13 pattern found');
+        }
+        
+        // Look for ISBN-10 pattern within longer string
+        const embeddedIsbn10Pattern = /(\d{9}[\dX])/i;
+        const embeddedIsbn10Match = codeData.match(embeddedIsbn10Pattern);
+        
+        if (embeddedIsbn10Match) {
+            const potentialIsbn10 = embeddedIsbn10Match[1];
+            debugLog(`✓ Found potential ISBN-10 within string: ${potentialIsbn10}`);
+            handleIsbnFound(potentialIsbn10);
+            return;
+        } else {
+            debugLog('❌ No embedded ISBN-10 pattern found');
+        }
+        
+        // Try with hyphenated variants (some barcodes include hyphens)
+        debugLog('Checking for hyphenated ISBN formats...');
+        const hyphenatedPattern = /ISBN[-:]?\s*([\d-]+X?)/i;
+        const hyphenatedMatch = codeData.match(hyphenatedPattern);
+        
+        if (hyphenatedMatch) {
+            const hyphenatedIsbn = hyphenatedMatch[1].replace(/-/g, '');
+            debugLog(`✓ Found hyphenated ISBN format: ${hyphenatedIsbn}`);
+            handleIsbnFound(hyphenatedIsbn);
+            return;
+        } else {
+            debugLog('❌ No hyphenated ISBN pattern found');
+        }
+        
+        // Last resort: Try to find any sequence of 10 or 13 consecutive digits
+        debugLog('Last resort: Looking for 10 or 13 consecutive digits...');
+        const digitsPattern = /(\d{10}|\d{13})/;
+        const digitsMatch = codeData.match(digitsPattern);
+        
+        if (digitsMatch) {
+            const digits = digitsMatch[1];
+            debugLog(`✓ Found ${digits.length}-digit sequence: ${digits}`);
+            handleIsbnFound(digits);
+            return;
+        }
+        
+        debugLog('❌ Failed to find a valid ISBN pattern');
+        debugLog('Please check the raw data above and enter ISBN manually if visible');
     }
     
     // Helper function to try to extract valid ISBN from a longer string
@@ -2691,6 +2876,50 @@ function initBarcodeScanner() {
     }
     
     // ... existing code ...
+
+    // Function to add a restart button to take another photo
+    function addRestartButton() {
+        const debugInfo = document.getElementById('camera-debug-info') || createDebugInfoElement();
+        
+        // Remove existing restart button if any
+        const existingButton = debugInfo.querySelector('.restart-button');
+        if (existingButton) {
+            existingButton.remove();
+        }
+        
+        const restartButton = document.createElement('button');
+        restartButton.textContent = 'Take Another Photo';
+        restartButton.className = 'btn btn-primary mt-3 restart-button';
+        restartButton.addEventListener('click', () => {
+            // Hide canvas and show video again
+            const canvas = document.getElementById('camera-canvas');
+            const video = document.getElementById('scanner-video');
+            
+            // Reset canvas styling
+            canvas.style.maxWidth = '';
+            canvas.style.height = '';
+            canvas.style.border = '';
+            
+            canvas.classList.add('hidden');
+            video.classList.remove('hidden');
+            
+            // Restart video if it was stopped
+            if (!video.srcObject) {
+                initBarcodeScanner();
+            } else {
+                video.play();
+            }
+            
+            if (cameraStatus) {
+                cameraStatus.textContent = 'Position barcode in the frame and tap the button';
+            }
+            
+            // Clear debug info
+            debugInfo.innerHTML = '';
+        });
+        
+        debugInfo.appendChild(restartButton);
+    }
 }
 
 // End of script
