@@ -2059,786 +2059,449 @@ function importBooksFromCSV(file) {
     reader.readAsText(file);
 }
 
-// Barcode Scanner Functionality
-let cameraStream = null;
-let canvasContext = null;
-let scanActive = false;
+// Initialize camera and barcode scanner
+let cameraInitialized = false;
+let videoActive = false;
 
 function initBarcodeScanner() {
-    const cameraVideo = document.getElementById('camera-preview');
-    const cameraCanvas = document.getElementById('camera-canvas');
-    const cameraStatus = document.getElementById('camera-status');
+    const videoElem = document.getElementById('camera-video');
+    const canvasElem = document.getElementById('camera-canvas');
     const cameraContainer = document.querySelector('.camera-container');
+    const cameraStatus = document.querySelector('.camera-status');
     
-    if (!cameraContainer) return;
+    let videoStream = null;
+
+    // Use this to hold our scan target guide
+    let scanTargetGuide = null;
     
-    canvasContext = cameraCanvas.getContext('2d', { willReadFrequently: true });
-    
-    // Helper function to log debug info - simplified to console only
-    function logDebug(message, type = 'info') {
-        // Only log to console in development mode
-        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-            console.log(`[Scanner ${type}]: ${message}`);
-        }
-    }
-    
-    // Only use the container click to toggle camera
-    cameraContainer.addEventListener('click', toggleCamera);
-    
-    // Stop camera when modal is closed or canceled
-    const isbnInputContainer = document.getElementById('isbn-input-container');
-    if (isbnInputContainer) {
-        isbnInputContainer.addEventListener('click', function(e) {
-            // Only close if clicking directly on the modal container background (not its children)
-            if (e.target === isbnInputContainer) {
-                stopCamera();
-            }
-        });
-    }
-    
-    // Also stop camera when cancel button is clicked
-    const cancelIsbnInputBtn = document.getElementById('cancel-isbn-input-btn');
-    if (cancelIsbnInputBtn) {
-        cancelIsbnInputBtn.addEventListener('click', function() {
-            stopCamera();
-        });
-    }
-    
-    // Add event listener to ISBN input field to auto-trigger lookup when a complete ISBN is entered
-    const isbnManualInput = document.getElementById('isbn-manual-input');
-    if (isbnManualInput) {
-        isbnManualInput.addEventListener('input', function() {
-            // Remove spaces, hyphens, etc. to get just the digits
-            const isbn = this.value.replace(/[^0-9X]/gi, '');
+    // Function to start the camera
+    async function startCamera() {
+        try {
+            if (videoActive) return;
             
-            // Check if we have a complete ISBN (10 or 13 digits)
-            if (/^(97(8|9))?\d{9}[\dX]$/i.test(isbn)) {
-                // We have a complete ISBN, trigger lookup
-                const lookupBtn = document.getElementById('isbn-lookup-btn');
-                if (lookupBtn) {
-                    logDebug(`Auto-triggering lookup for ISBN: ${isbn}`, 'success');
-                    lookupBtn.click();
-                }
+            cameraContainer.classList.add('active');
+            cameraStatus.textContent = 'Starting camera...';
+            
+            // Create our scan target guide if it doesn't exist
+            if (!scanTargetGuide) {
+                scanTargetGuide = document.createElement('div');
+                scanTargetGuide.id = 'scan-target-guide';
+                scanTargetGuide.style.position = 'absolute';
+                scanTargetGuide.style.top = '50%';
+                scanTargetGuide.style.left = '50%';
+                scanTargetGuide.style.width = '60%';
+                scanTargetGuide.style.height = '25%';
+                scanTargetGuide.style.transform = 'translate(-50%, -50%)';
+                scanTargetGuide.style.pointerEvents = 'none';
+                scanTargetGuide.style.zIndex = '10';
+                scanTargetGuide.style.borderRadius = '8px';
+                cameraContainer.appendChild(scanTargetGuide);
             }
-        });
-    }
-    
-    function toggleCamera() {
-        if (cameraStream) {
-            stopCamera();
-        } else {
-            startCamera();
-        }
-    }
-    
-    function startCamera() {
-        if (scanActive) return; // Already active
-        
-        scanActive = true;
-        
-        // Show camera elements
-        cameraContainer.classList.add('active');
-        document.querySelector('.camera-placeholder').style.display = 'none';
-        
-        // Add scanning target guide
-        const scanTarget = document.createElement('div');
-        scanTarget.id = 'scan-target-guide';
-        scanTarget.style.cssText = `
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 70%;
-            height: 25%;
-            border: 3px dashed #ff3333;
-            border-radius: 10px;
-            box-shadow: 0 0 0 2000px rgba(0, 0, 0, 0.3);
-            z-index: 10;
-        `;
-        
-        // Add text guide
-        const scanGuideText = document.createElement('div');
-        scanGuideText.style.cssText = `
-            position: absolute;
-            top: calc(50% - 70px);
-            left: 50%;
-            transform: translateX(-50%);
-            color: white;
-            background-color: rgba(0, 0, 0, 0.6);
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-weight: bold;
-            z-index: 11;
-        `;
-        scanGuideText.textContent = "Position barcode in box";
-        
-        cameraContainer.appendChild(scanTarget);
-        cameraContainer.appendChild(scanGuideText);
-        
-        // Show camera if hidden
-        cameraVideo.removeAttribute('hidden');
-        cameraVideo.style.display = 'block';
-        
-        cameraStatus.textContent = 'Camera starting...';
-        
-        // Reset scan count and times
-        scanCount = 0;
-        lastRawData = null;
-        
-        // Clear any pending manual entry timeout
-        if (window.manualEntryTimeout) {
-            clearTimeout(window.manualEntryTimeout);
-            window.manualEntryTimeout = null;
-        }
-        
-        // Initialize scanner if needed
-        if (!window.reader) {
-            try {
-                window.reader = new ZXing.BrowserMultiFormatReader();
-                logDebug("ZXing barcode reader initialized", 'success');
-            } catch (e) {
-                logDebug(`Failed to initialize ZXing: ${e.message}`, 'error');
+            
+            // Create and add capture button if it doesn't exist
+            let captureBtn = cameraContainer.querySelector('.capture-photo-btn');
+            if (!captureBtn) {
+                captureBtn = document.createElement('button');
+                captureBtn.className = 'capture-photo-btn';
+                captureBtn.setAttribute('aria-label', 'Take Photo');
+                captureBtn.innerHTML = '<span class="material-symbols-outlined">photo_camera</span>';
+                cameraContainer.appendChild(captureBtn);
+                
+                // Add click event listener for capture button
+                captureBtn.addEventListener('click', captureAndScanImage);
+            } else {
+                captureBtn.style.display = 'flex';
             }
-        }
-        
-        // Get camera access
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-            navigator.mediaDevices.getUserMedia({ 
-                video: { 
-                    facingMode: 'environment',
+            
+            // Create a manual ISBN button
+            let manualBtn = cameraContainer.querySelector('.manual-isbn-btn');
+            if (!manualBtn) {
+                manualBtn = document.createElement('button');
+                manualBtn.className = 'manual-isbn-btn';
+                manualBtn.textContent = 'Enter ISBN Manually';
+                cameraContainer.appendChild(manualBtn);
+                
+                manualBtn.addEventListener('click', () => {
+                    // Focus on the ISBN input field
+                    const isbnInput = document.getElementById('isbn-input');
+                    if (isbnInput) {
+                        stopCamera();
+                        isbnInput.focus();
+                    }
+                });
+            } else {
+                manualBtn.style.display = 'block';
+            }
+            
+            // Request camera access with a preference for the back camera
+            const constraints = {
+                video: {
+                    facingMode: "environment",
                     width: { ideal: 1280 },
                     height: { ideal: 720 }
-                } 
-            }).then(function(stream) {
-                if ('srcObject' in cameraVideo) {
-                    cameraVideo.srcObject = stream;
-                } else {
-                    // Fallback for older browsers
-                    cameraVideo.src = window.URL.createObjectURL(stream);
-                }
-                cameraVideo.play();
-                
-                // Show helpful instructions in the status area
-                cameraStatus.textContent = 'Position barcode in red box and hold steady';
-                
-                // After 3 seconds, show a more detailed hint
-                setTimeout(() => {
-                    if (scanActive) {
-                        cameraStatus.textContent = 'Make sure barcode is well-lit and not blurry';
-                    }
-                }, 3000);
-                
-                // After 10 seconds, show a patience message
-                setTimeout(() => {
-                    if (scanActive) {
-                        cameraStatus.textContent = 'Still searching for barcode - keep it centered';
-                    }
-                }, 10000);
-                
-                // Start scanning
-                scanBarcode();
-                
-            }).catch(function(error) {
-                logDebug(`Camera error: ${error.name}: ${error.message}`, 'error');
-                cameraStatus.textContent = `Camera error: ${error.message}`;
-                scanActive = false;
+                },
+                audio: false
+            };
+            
+            videoStream = await navigator.mediaDevices.getUserMedia(constraints);
+            videoElem.srcObject = videoStream;
+            
+            // Wait for video to be ready
+            await new Promise(resolve => {
+                videoElem.addEventListener('loadedmetadata', resolve, { once: true });
+                videoElem.play();
             });
-        } else {
-            logDebug('getUserMedia not supported', 'error');
-            cameraStatus.textContent = 'Camera not supported in this browser';
-            scanActive = false;
-        }
-    }
-    
-    function stopCamera() {
-        scanActive = false;
-        
-        // Clear any pending timeout for manual entry
-        if (window.manualEntryTimeout) {
-            clearTimeout(window.manualEntryTimeout);
-            window.manualEntryTimeout = null;
-        }
-        
-        if (cameraVideo && cameraVideo.srcObject) {
-            const stream = cameraVideo.srcObject;
-            const tracks = stream.getTracks();
             
-            tracks.forEach(track => track.stop());
-            
-            cameraVideo.srcObject = null;
-            cameraVideo.setAttribute('hidden', '');
-            cameraVideo.style.display = 'none';
-            
-            cameraContainer.classList.remove('active');
-            document.querySelector('.camera-placeholder').style.display = 'flex';
-            
-            // Remove scanning target guide
-            const scanTarget = document.getElementById('scan-target-guide');
-            if (scanTarget) scanTarget.remove();
-            
-            // Remove guide text
-            const scanGuideText = cameraContainer.querySelector('div[style*="top: calc(50% - 70px)"]');
-            if (scanGuideText) scanGuideText.remove();
-            
-            cameraStatus.textContent = '';
-            logDebug('Camera stopped', 'info');
-        }
-    }
-    
-    let scanCount = 0;
-    let lastRawData = null;
-    
-    function scanBarcode() {
-        if (!scanActive) return;
-        
-        scanCount++;
-        
-        // Only log every 30 frames to avoid flooding the debug panel
-        const shouldLog = scanCount % 30 === 0;
-        
-        if (cameraVideo.readyState === cameraVideo.HAVE_ENOUGH_DATA) {
-            if (shouldLog) {
-                logDebug(`Scanning frame #${scanCount}`, 'info');
-            }
-            
-            try {
-                // Draw video frame to canvas (invisible but used for image processing)
-                cameraCanvas.height = cameraVideo.videoHeight;
-                cameraCanvas.width = cameraVideo.videoWidth;
-                canvasContext.drawImage(cameraVideo, 0, 0, cameraCanvas.width, cameraCanvas.height);
-                
-                // Focus on the target area for ZXing
-                const centerWidth = Math.floor(cameraCanvas.width * 0.7);
-                const centerHeight = Math.floor(cameraCanvas.height * 0.25);
-                const startX = Math.floor((cameraCanvas.width - centerWidth) / 2);
-                const startY = Math.floor((cameraCanvas.height - centerHeight) / 2);
-                
-                // Get the imageData for the entire canvas
-                const fullImageData = canvasContext.getImageData(0, 0, cameraCanvas.width, cameraCanvas.height);
-                
-                // Use our custom detector on the full image data but focusing on target area
-                // Check only every 45 frames (about 1.5 seconds at 30fps) - Previously 15 frames
-                if (scanCount % 20 === 0) {
-                    if (detectBarcodeInImage(fullImageData)) {
-                        // We found a likely barcode pattern, but don't show manual entry popup
-                        // Just update the status
-                        cameraStatus.textContent = "Barcode pattern detected - analyzing...";
-                    }
-                }
-                
-                // ZXING BARCODE CHECK - Try standard barcode scanning on target area only
-                if (!window.reader) {
-                    if (shouldLog) {
-                        logDebug("ZXing reader not initialized", 'error');
-                    }
-                    return;
-                }
-                
-                try {
-                    // Create a smaller canvas for the target area
-                    const targetCanvas = document.createElement('canvas');
-                    targetCanvas.width = centerWidth;
-                    targetCanvas.height = centerHeight;
-                    const targetCtx = targetCanvas.getContext('2d');
-                    
-                    // Draw only the target area to this canvas
-                    targetCtx.drawImage(cameraVideo, 
-                        startX, startY, centerWidth, centerHeight,
-                        0, 0, centerWidth, centerHeight);
-                    
-                    // Get the image data from this smaller targeted canvas
-                    const targetImageData = targetCtx.getImageData(0, 0, centerWidth, centerHeight);
-                    
-                    // Try to decode just the target area
-                    const code = window.reader.decode(targetImageData);
-                    
-                    if (code && code.text) {
-                        if (code.text !== lastRawData) {
-                            lastRawData = code.text;
-                            logDebug(`Barcode detected in target area: "${code.text}"`, 'success');
-                            
-                            // Clear any pending manual entry timeout
-                            if (window.manualEntryTimeout) {
-                                clearTimeout(window.manualEntryTimeout);
-                                window.manualEntryTimeout = null;
-                            }
-                            
-                            processCodeData(code.text);
-                        }
-                    }
-                } catch (decodeError) {
-                    // Fallback for Type errors - try to extract the ISBN from the visible text
-                    if (decodeError && decodeError.name === 'TypeError') {
-                        logDebug("Type error in ZXing decode, trying alternative approach", 'warning');
-                        // Try to detect if there's a barcode in the image at all
-                        if (detectBarcodeInImage(fullImageData)) {
-                            // Don't show manual entry popup, just update status
-                            cameraStatus.textContent = "Analyzing barcode pattern...";
-                        }
-                    } else if (shouldLog && decodeError && decodeError.message && 
-                               !decodeError.message.includes("could not find finder")) {
-                        logDebug(`Decode error: ${decodeError.message || decodeError.name}`, 'warning');
-                    }
-                }
-                
-                // Add debug visualization for ISBN pattern detection
-                if (scanCount % 10 === 0) { // Check frequently but not every frame
-                    detectAndDisplayIsbnPattern();
-                }
-                
-            } catch (error) {
-                if (error && error.message && !error.message.includes("could not find finder")) {
-                    logDebug(`Scanner error: ${error.message}`, 'error');
-                }
-            }
-        } else if (shouldLog) {
-            logDebug("Camera feed not ready yet", 'info');
-        }
-        
-        // Continue scanning if still active
-        if (scanActive) {
-            requestAnimationFrame(scanBarcode);
-        }
-    }
-    
-    // Function to detect ISBN patterns in the image and display them
-    function detectAndDisplayIsbnPattern() {
-        try {
-            if (!scanActive || !cameraCanvas) return;
-            
-            // Create a temporary canvas for OCR debugging
-            const tempCanvas = document.createElement('canvas');
-            const targetWidth = Math.floor(cameraCanvas.width * 0.7);  // 70% of width
-            const targetHeight = Math.floor(cameraCanvas.height * 0.25); // 25% of height
-            const startX = Math.floor((cameraCanvas.width - targetWidth) / 2);
-            const startY = Math.floor((cameraCanvas.height - targetHeight) / 2);
-            
-            tempCanvas.width = targetWidth;
-            tempCanvas.height = targetHeight;
-            
-            const tempCtx = tempCanvas.getContext('2d');
-            tempCtx.drawImage(cameraVideo, 
-                startX, startY, targetWidth, targetHeight,
-                0, 0, targetWidth, targetHeight);
-            
-            // Get the image data for OCR
-            const imageData = tempCtx.getImageData(0, 0, targetWidth, targetHeight);
-            
-            // This is a mock OCR function as we don't have a real OCR library
-            // In a real implementation, you would use Tesseract.js or similar
-            mockDetectIsbnText(imageData);
+            videoActive = true;
+            cameraStatus.textContent = 'Position barcode in the frame and tap the button';
+            debug('Camera started');
             
         } catch (error) {
-            logDebug(`Error in ISBN pattern detection: ${error.message}`, 'error');
+            console.error("Error starting camera:", error);
+            cameraStatus.textContent = 'Could not access camera. Error: ' + error.message;
+            debug('Camera error: ' + error.message);
         }
     }
     
-    // Mock function to simulate OCR detection of ISBN patterns
-    function mockDetectIsbnText(imageData) {
-        // Create or update debug info display
-        let debugInfoDisplay = document.getElementById('isbn-debug-info');
-        if (!debugInfoDisplay) {
-            debugInfoDisplay = document.createElement('div');
-            debugInfoDisplay.id = 'isbn-debug-info';
-            debugInfoDisplay.style.cssText = `
-                position: absolute;
-                top: 10px;
-                left: 10px;
-                background-color: rgba(0, 0, 0, 0.7);
-                color: white;
-                padding: 10px;
-                border-radius: 5px;
-                font-family: monospace;
-                font-size: 12px;
-                max-width: 80%;
-                z-index: 1000;
-                overflow: hidden;
-                white-space: nowrap;
-                text-overflow: ellipsis;
-            `;
-            cameraContainer.appendChild(debugInfoDisplay);
+    // Function to stop the camera
+    function stopCamera() {
+        if (!videoActive) return;
+        
+        // Stop video stream
+        if (videoStream) {
+            videoStream.getTracks().forEach(track => track.stop());
+            videoStream = null;
         }
         
-        // Update metrics display
-        debugInfoDisplay.innerHTML = `
-            <div><strong>Frame:</strong> ${scanCount}</div>
-            <div><strong>Image:</strong> ${imageData.width}x${imageData.height}</div>
-            <div><strong>Transitions:</strong> ${window.lastTransitions || 0}</div>
-            <div><strong>Dark/Bright:</strong> ${window.lastDarkCount || 0}/${window.lastBrightCount || 0}</div>
-        `;
+        // Hide video element and container
+        videoElem.srcObject = null;
+        cameraContainer.classList.remove('active');
         
-        // If we have raw barcode data, show it
-        if (lastRawData) {
-            const div = document.createElement('div');
-            div.innerHTML = `<strong>Raw data:</strong> ${lastRawData}`;
-            debugInfoDisplay.appendChild(div);
+        // Hide buttons
+        const captureBtn = cameraContainer.querySelector('.capture-photo-btn');
+        if (captureBtn) captureBtn.style.display = 'none';
+        
+        const manualBtn = cameraContainer.querySelector('.manual-isbn-btn');
+        if (manualBtn) manualBtn.style.display = 'none';
+        
+        videoActive = false;
+        debug('Camera stopped');
+    }
+    
+    // Function to capture and scan a single image
+    function captureAndScanImage() {
+        if (!videoActive) return;
+        
+        // Flash effect for feedback
+        const flashElement = document.createElement('div');
+        flashElement.style.position = 'absolute';
+        flashElement.style.top = '0';
+        flashElement.style.left = '0';
+        flashElement.style.width = '100%';
+        flashElement.style.height = '100%';
+        flashElement.style.backgroundColor = 'white';
+        flashElement.style.opacity = '0.8';
+        flashElement.style.zIndex = '50';
+        flashElement.style.transition = 'opacity 0.5s ease-out';
+        cameraContainer.appendChild(flashElement);
+        
+        // Make the flash fade out
+        setTimeout(() => {
+            flashElement.style.opacity = '0';
+            setTimeout(() => flashElement.remove(), 500);
+        }, 100);
+        
+        cameraStatus.textContent = 'Processing image...';
+        
+        try {
+            // Set canvas dimensions to match video
+            canvasElem.width = videoElem.videoWidth;
+            canvasElem.height = videoElem.videoHeight;
             
-            // Check if it contains ISBN pattern
-            const isbnMatch = lastRawData.match(/ISBN[:\s-]*(\d[\d-]*)/i);
-            if (isbnMatch) {
-                const div = document.createElement('div');
-                div.innerHTML = `<strong>ISBN found:</strong> ${isbnMatch[1]}`;
-                div.style.color = '#00ff00';
-                debugInfoDisplay.appendChild(div);
+            // Draw the current video frame to the canvas
+            const ctx = canvasElem.getContext('2d');
+            ctx.drawImage(videoElem, 0, 0, canvasElem.width, canvasElem.height);
+            
+            // Get image data for the target area - using the position of scan guide
+            const targetWidth = Math.round(canvasElem.width * 0.6);  // 60% of width
+            const targetHeight = Math.round(canvasElem.height * 0.25); // 25% of height
+            const targetX = Math.round((canvasElem.width - targetWidth) / 2);
+            const targetY = Math.round((canvasElem.height - targetHeight) / 2);
+            
+            // Create a smaller canvas just for the target area
+            const targetCanvas = document.createElement('canvas');
+            targetCanvas.width = targetWidth;
+            targetCanvas.height = targetHeight;
+            const targetCtx = targetCanvas.getContext('2d');
+            targetCtx.drawImage(
+                canvasElem, 
+                targetX, targetY, targetWidth, targetHeight,
+                0, 0, targetWidth, targetHeight
+            );
+            
+            // Convert target canvas to data URL for debugging/display if needed
+            const dataUrl = targetCanvas.toDataURL('image/jpeg', 0.8);
+            
+            // Get image data from target canvas for processing
+            const imageData = targetCtx.getImageData(0, 0, targetWidth, targetHeight);
+            
+            debug(`Processing image: ${targetWidth}x${targetHeight}`);
+            
+            // First check if we can detect a barcode pattern
+            const hasBarcode = detectBarcodeInImage(imageData);
+            
+            if (hasBarcode) {
+                debug('Barcode pattern detected, attempting to decode...');
+                
+                // Try to decode with ZXing library
+                try {
+                    const result = window.reader.decode(imageData.data, imageData.width, imageData.height);
+                    if (result && result.text) {
+                        debug('ZXing decoded: ' + result.text);
+                        processCodeData(result.text);
+                        return;
+                    }
+                } catch (decodeError) {
+                    debug('ZXing decode error: ' + decodeError.message);
+                    // If it's a TypeError, the ZXing library might not be available
+                    if (decodeError instanceof TypeError) {
+                        debug('ZXing library error - check if properly loaded');
+                    }
+                }
+                
+                // If ZXing fails but we detected a barcode pattern, ask for manual entry
+                tryManualIsbnExtraction();
+            } else {
+                cameraStatus.textContent = 'No barcode detected. Try again.';
+                debug('No barcode detected in image');
             }
-        }
-        
-        // If we have detected barcode metrics, show them
-        if (window.lastBarcodeDetected) {
-            const div = document.createElement('div');
-            div.innerHTML = `<strong>Barcode detected:</strong> YES`;
-            div.style.color = '#00ff00';
-            debugInfoDisplay.appendChild(div);
+            
+        } catch (error) {
+            console.error('Error processing captured image:', error);
+            cameraStatus.textContent = 'Error processing image';
+            debug('Image processing error: ' + error.message);
         }
     }
     
-    // Helper to detect barcode patterns in the image
+    // Function to attempt to detect barcode patterns in an image
     function detectBarcodeInImage(imageData) {
-        // Focus on the center area of the image (where the guide rectangle is)
-        const centerWidth = Math.floor(imageData.width * 0.7);  // 70% of width
-        const centerHeight = Math.floor(imageData.height * 0.25); // 25% of height
+        // Simple detection heuristic looking for high contrast horizontal lines
+        // This is a basic approach and can be improved
         
-        const startX = Math.floor((imageData.width - centerWidth) / 2);
-        const startY = Math.floor((imageData.height - centerHeight) / 2);
+        // Sample horizontal lines from the middle of the image 
+        const width = imageData.width;
+        const height = imageData.height;
+        const data = imageData.data;
         
-        // For visual debugging (uncomment if needed)
-        // canvasContext.strokeStyle = 'red';
-        // canvasContext.strokeRect(startX, startY, centerWidth, centerHeight);
+        // We'll check 5 horizontal lines evenly distributed across the middle third
+        const startY = Math.floor(height * 0.33);
+        const endY = Math.floor(height * 0.66);
+        const numLines = 5;
+        const lineSpacing = Math.floor((endY - startY) / (numLines - 1));
         
-        let transitions = 0;
-        let lastPixelDark = false;
-        let darkCount = 0;
-        let brightCount = 0;
+        let barcodeDetected = false;
+        let totalTransitions = 0;
         
-        // Sample pixels in the target area only
-        for (let y = startY; y < startY + centerHeight; y += 3) {
-            const rowOffset = y * imageData.width * 4;
+        for (let i = 0; i < numLines; i++) {
+            const y = startY + (i * lineSpacing);
+            // Count transitions between dark and bright along this line
+            let transitions = 0;
+            let lastBright = null;
             
-            lastPixelDark = false; // Reset for each row
-            let rowTransitions = 0;
+            // Sample every few pixels to speed up processing
+            const sampleStep = 2;
             
-            for (let x = startX; x < startX + centerWidth; x += 2) {
-                const idx = rowOffset + x * 4;
-                if (idx >= imageData.data.length) continue;
-                
-                const r = imageData.data[idx];
-                const g = imageData.data[idx + 1];
-                const b = imageData.data[idx + 2];
-                
-                // Calculate pixel brightness
+            for (let x = 0; x < width; x += sampleStep) {
+                const pixelOffset = (y * width + x) * 4;
+                // Calculate brightness (simple average of RGB)
+                const r = data[pixelOffset];
+                const g = data[pixelOffset + 1];
+                const b = data[pixelOffset + 2];
                 const brightness = (r + g + b) / 3;
                 
-                // Check if this is a dark pixel (likely part of barcode)
-                const isDark = brightness < 100;
+                // Determine if this pixel is "bright"
+                const isBright = brightness > 127;
                 
-                if (isDark) {
-                    darkCount++;
-                } else {
-                    brightCount++;
+                // Count transitions
+                if (lastBright !== null && isBright !== lastBright) {
+                    transitions++;
                 }
                 
-                // Count transitions from dark to bright or bright to dark
-                if (x > startX && isDark !== lastPixelDark) {
-                    rowTransitions++;
-                }
-                
-                lastPixelDark = isDark;
+                lastBright = isBright;
             }
             
-            // Add row transitions to total
-            transitions += rowTransitions;
+            totalTransitions += transitions;
+            
+            // Heuristic: A barcode typically has many dark/light transitions
+            // The number depends on barcode type and density
+            if (transitions > 30) {
+                barcodeDetected = true;
+            }
+            
+            debug(`Line ${i+1}: ${transitions} transitions`);
         }
         
-        // Store metrics for debugging
-        window.lastTransitions = transitions;
-        window.lastDarkCount = darkCount;
-        window.lastBrightCount = brightCount;
+        debug(`Average transitions per line: ${totalTransitions / numLines}`);
         
-        // If we see a high number of transitions and a decent ratio of dark/bright pixels,
-        // it's likely a barcode - more strict thresholds
-        const hasHighTransitions = transitions > 50; // Increased from 40 to 50
-        const hasReasonableDarkBrightRatio = darkCount > 40 && brightCount > 40; // Increased from 30 to 40
-        
-        // Check for regular pattern (typical in barcodes)
-        let hasRegularPattern = false;
-        if (transitions > 30) { // Increased from 20 to 30
-            // Count number of transitions in small segments to see if they're evenly distributed
-            const segmentCount = 5;
-            const segmentWidth = Math.floor(centerWidth / segmentCount);
-            let segmentTransitions = new Array(segmentCount).fill(0);
-            
-            // Sample the middle row of the target area
-            const middleY = startY + Math.floor(centerHeight / 2);
-            const rowOffset = middleY * imageData.width * 4;
-            
-            lastPixelDark = false;
-            for (let i = 0; i < segmentCount; i++) {
-                const segStartX = startX + (i * segmentWidth);
-                const segEndX = segStartX + segmentWidth;
-                
-                for (let x = segStartX; x < segEndX; x += 2) {
-                    const idx = rowOffset + x * 4;
-                    if (idx < imageData.data.length) {
-                        const r = imageData.data[idx];
-                        const g = imageData.data[idx + 1];
-                        const b = imageData.data[idx + 2];
-                        const brightness = (r + g + b) / 3;
-                        const isDark = brightness < 100;
-                        
-                        if (x > segStartX && isDark !== lastPixelDark) {
-                            segmentTransitions[i]++;
-                        }
-                        
-                        lastPixelDark = isDark;
-                    }
-                }
-            }
-            
-            // Calculate variation between segment transitions
-            let sum = segmentTransitions.reduce((a, b) => a + b, 0);
-            let mean = sum / segmentCount;
-            let variance = segmentTransitions.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / segmentCount;
-            
-            // Lower threshold for variance since we're in a targeted area
-            // Require a higher minimum average of transitions per segment
-            hasRegularPattern = (variance < 25) && (mean > 5);
-            
-            if (scanCount % 30 === 0) {
-                logDebug(`Target area segments: ${segmentTransitions.join(', ')} | Variance: ${variance.toFixed(2)}`, 'info');
-            }
-        }
-        
-        // Require meeting all three criteria to detect a barcode
-        const isBarcodeDetected = hasHighTransitions && hasReasonableDarkBrightRatio && hasRegularPattern;
-        window.lastBarcodeDetected = isBarcodeDetected;
-        
-        // Log detection metrics periodically
-        if (scanCount % 30 === 0) {
-            logDebug(`Target area metrics: transitions=${transitions}, dark=${darkCount}, bright=${brightCount}`, 'info');
-            if (isBarcodeDetected) {
-                logDebug('BARCODE PATTERN DETECTED in target area!', 'success');
-            }
-        }
-        
-        return isBarcodeDetected;
+        // If at least 3 of the lines had high transitions, consider it a barcode
+        return barcodeDetected;
     }
-
-    // Try to manually extract ISBN from the canvas image - NO LONGER AUTO-TRIGGERED
+    
+    // Function to ask user to manually input the ISBN they see
     function tryManualIsbnExtraction() {
-        // Let's check if we can extract an ISBN from the current frame
-        const canvas = document.getElementById('camera-canvas');
-        if (!canvas) return;
-        
-        logDebug("Attempting to extract potential ISBN from image", 'info');
-        
-        // Create a quick entry option without a specific ISBN
-        // In a production app, you would implement actual OCR here
+        debug('Asking for manual ISBN input');
         createQuickIsbnButton();
+        cameraStatus.textContent = 'Barcode found! Enter visible ISBN below';
     }
+    
+    // Function to create a quick banner with a button for the user to enter an ISBN
+    function createQuickIsbnButton() {
+        // Remove any existing banner
+        const existingBanner = document.querySelector('.quick-isbn-entry');
+        if (existingBanner) {
+            existingBanner.remove();
+        }
 
-    // Add a manual ISBN button to the camera interface
-    function addManualIsbnButton() {
-        // Remove existing button if any
-        const existingBtn = document.getElementById('manual-isbn-btn');
-        if (existingBtn) existingBtn.remove();
+        // Create a new banner
+        const banner = document.createElement('div');
+        banner.className = 'quick-isbn-entry';
+        banner.style.position = 'absolute';
+        banner.style.bottom = '100px';
+        banner.style.left = '0';
+        banner.style.right = '0';
+        banner.style.padding = '10px';
+        banner.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
+        banner.style.zIndex = '20';
+        banner.style.display = 'flex';
+        banner.style.flexDirection = 'column';
+        banner.style.alignItems = 'center';
+        banner.style.justifyContent = 'center';
+        banner.style.gap = '10px';
         
-        // Create manual entry button
-        const manualBtn = document.createElement('button');
-        manualBtn.id = 'manual-isbn-btn';
-        manualBtn.className = 'manual-isbn-btn';
-        manualBtn.textContent = 'Enter ISBN Manually';
-        manualBtn.style.cssText = `
-            position: absolute;
-            bottom: 60px;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: rgba(255, 255, 255, 0.9);
-            color: #0077cc;
-            border: none;
-            border-radius: 20px;
-            padding: 8px 16px;
-            font-weight: bold;
-            z-index: 100;
-        `;
+        // Add an input field for the ISBN
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.placeholder = 'Enter visible ISBN from image';
+        input.style.width = '90%';
+        input.style.padding = '8px';
+        input.style.borderRadius = '4px';
+        input.style.border = '1px solid #ccc';
         
-        manualBtn.addEventListener('click', function() {
-            tryManualIsbnExtraction();
+        // Add a button to use this ISBN
+        const button = document.createElement('button');
+        button.textContent = 'Use This ISBN';
+        button.className = 'btn btn-outline';
+        button.style.margin = '0';
+        
+        // On button click, set the ISBN and trigger lookup
+        button.addEventListener('click', () => {
+            const isbn = input.value.trim();
+            if (isbn) {
+                debug('Using manually entered ISBN: ' + isbn);
+                handleIsbnFound(isbn);
+            }
         });
         
-        cameraContainer.appendChild(manualBtn);
+        // Add enter key support
+        input.addEventListener('keyup', (event) => {
+            if (event.key === 'Enter') {
+                button.click();
+            }
+        });
+        
+        // Add elements to the banner
+        banner.appendChild(input);
+        banner.appendChild(button);
+        
+        // Add the banner to the camera container
+        cameraContainer.appendChild(banner);
+        
+        // Focus on the input
+        setTimeout(() => input.focus(), 100);
     }
-
-    // Override the startCamera function to add the manual button
-    function startCamera() {
-        if (scanActive) return; // Already active
+    
+    // Process data from scanned code
+    function processCodeData(rawData) {
+        debug('Processing code data: ' + rawData);
         
-        scanActive = true;
+        // Pattern for direct ISBN match (10 or 13 digits, possibly with hyphens)
+        const isbnPattern = /(?:ISBN(?:-1[03])?:?\s*)?(?=[-0-9 ]{17}|[-0-9X ]{13})(?:97[89][-\s]?)?[0-9]{1,5}[-\s]?[0-9]+[-\s]?[0-9]+[-\s]?[0-9X]/i;
         
-        // Show camera elements
-        cameraContainer.classList.add('active');
-        document.querySelector('.camera-placeholder').style.display = 'none';
+        // Pattern for embedded ISBN (preceeded by text like "ISBN: ")
+        const embeddedIsbnPattern = /ISBN[-: ]*(97[89][-\s]?)?[0-9]{1,5}[-\s]?[0-9]+[-\s]?[0-9]+[-\s]?[0-9X]/i;
         
-        // Add scanning target guide
-        const scanTarget = document.createElement('div');
-        scanTarget.id = 'scan-target-guide';
-        scanTarget.style.cssText = `
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 70%;
-            height: 25%;
-            border: 3px dashed #ff3333;
-            border-radius: 10px;
-            box-shadow: 0 0 0 2000px rgba(0, 0, 0, 0.3);
-            z-index: 10;
-        `;
+        // Pattern for just 10 or 13 consecutive digits (potential raw ISBN)
+        const digitsOnlyPattern = /\b\d{10}\b|\b\d{13}\b/;
         
-        // Add text guide
-        const scanGuideText = document.createElement('div');
-        scanGuideText.style.cssText = `
-            position: absolute;
-            top: calc(50% - 70px);
-            left: 50%;
-            transform: translateX(-50%);
-            color: white;
-            background-color: rgba(0, 0, 0, 0.6);
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-weight: bold;
-            z-index: 11;
-        `;
-        scanGuideText.textContent = "Position barcode in box";
+        let isbn = null;
         
-        cameraContainer.appendChild(scanTarget);
-        cameraContainer.appendChild(scanGuideText);
-        
-        // Add manual ISBN button
-        addManualIsbnButton();
-        
-        // Show camera if hidden
-        cameraVideo.removeAttribute('hidden');
-        cameraVideo.style.display = 'block';
-        
-        cameraStatus.textContent = 'Camera starting...';
-        
-        // Reset scan count and times
-        scanCount = 0;
-        lastRawData = null;
-        
-        // Clear any pending manual entry timeout
-        if (window.manualEntryTimeout) {
-            clearTimeout(window.manualEntryTimeout);
-            window.manualEntryTimeout = null;
+        // Try direct ISBN format first
+        const isbnMatch = rawData.match(isbnPattern);
+        if (isbnMatch) {
+            isbn = isbnMatch[0];
+            debug('Found ISBN format: ' + isbn);
         }
-        
-        // Reset debug metrics
-        window.lastTransitions = 0;
-        window.lastDarkCount = 0; 
-        window.lastBrightCount = 0;
-        window.lastBarcodeDetected = false;
-        
-        // Initialize scanner if needed
-        if (!window.reader) {
-            try {
-                window.reader = new ZXing.BrowserMultiFormatReader();
-                logDebug("ZXing barcode reader initialized", 'success');
-            } catch (e) {
-                logDebug(`Failed to initialize ZXing: ${e.message}`, 'error');
+        // Then try embedded ISBN format
+        else if (!isbn) {
+            const embeddedMatch = rawData.match(embeddedIsbnPattern);
+            if (embeddedMatch) {
+                // Extract just the digits and X if present
+                isbn = embeddedMatch[0].replace(/ISBN[-: ]*/i, '');
+                debug('Found embedded ISBN: ' + isbn);
+            }
+        }
+        // Finally try just finding 10 or 13 consecutive digits
+        else if (!isbn) {
+            const digitsMatch = rawData.match(digitsOnlyPattern);
+            if (digitsMatch) {
+                isbn = digitsMatch[0];
+                debug('Found potential raw ISBN: ' + isbn);
             }
         }
         
-        // Get camera access
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-            navigator.mediaDevices.getUserMedia({ 
-                video: { 
-                    facingMode: 'environment',
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 }
-                } 
-            }).then(function(stream) {
-                if ('srcObject' in cameraVideo) {
-                    cameraVideo.srcObject = stream;
-                } else {
-                    // Fallback for older browsers
-                    cameraVideo.src = window.URL.createObjectURL(stream);
-                }
-                cameraVideo.play();
-                
-                // Show helpful instructions in the status area
-                cameraStatus.textContent = 'Position barcode in red box and hold steady';
-                
-                // After 3 seconds, show a more detailed hint
-                setTimeout(() => {
-                    if (scanActive) {
-                        cameraStatus.textContent = 'Make sure barcode is well-lit and not blurry';
-                    }
-                }, 3000);
-                
-                // After 10 seconds, show a patience message
-                setTimeout(() => {
-                    if (scanActive) {
-                        cameraStatus.textContent = 'Still scanning... Use manual button if needed';
-                    }
-                }, 10000);
-                
-                // Start scanning
-                scanBarcode();
-                
-            }).catch(function(error) {
-                logDebug(`Camera error: ${error.name}: ${error.message}`, 'error');
-                cameraStatus.textContent = `Camera error: ${error.message}`;
-                scanActive = false;
-            });
+        // If we have an ISBN, remove any non-digit/X characters
+        if (isbn) {
+            isbn = isbn.replace(/[^0-9X]/gi, '');
+            
+            // Validate length
+            if (isbn.length === 10 || isbn.length === 13) {
+                debug('Extracted valid ISBN: ' + isbn);
+                handleIsbnFound(isbn);
+            } else {
+                debug('Invalid ISBN length: ' + isbn.length);
+                tryManualIsbnExtraction();
+            }
         } else {
-            logDebug('getUserMedia not supported', 'error');
-            cameraStatus.textContent = 'Camera not supported in this browser';
-            scanActive = false;
+            debug('No ISBN pattern found in: ' + rawData);
+            tryManualIsbnExtraction();
         }
     }
     
-    function stopCamera() {
-        scanActive = false;
+    // Function to handle a found ISBN
+    function handleIsbnFound(isbn) {
+        debug('ISBN found: ' + isbn);
         
-        // Clear any pending timeout for manual entry
-        if (window.manualEntryTimeout) {
-            clearTimeout(window.manualEntryTimeout);
-            window.manualEntryTimeout = null;
+        // Update the manual ISBN input field
+        if (isbnManualInput) {
+            isbnManualInput.value = isbn;
         }
         
-        // Remove debug info display
-        const debugInfo = document.getElementById('isbn-debug-info');
-        if (debugInfo) debugInfo.remove();
+        // Stop the camera
+        stopCamera();
         
-        // Remove manual ISBN button
-        const manualBtn = document.getElementById('manual-isbn-btn');
-        if (manualBtn) manualBtn.remove();
+        // Show ISBN input container if not already visible
+        if (isbnInputContainer && !isbnInputContainer.classList.contains('visible')) {
+            showIsbnInputModal();
+        }
         
-        if (cameraVideo && cameraVideo.srcObject) {
-            const stream = cameraVideo.srcObject;
-            const tracks = stream.getTracks();
-            
-            tracks.forEach(track => track.stop());
-            
-            cameraVideo.srcObject = null;
-            cameraVideo.setAttribute('hidden', '');
-            cameraVideo.style.display = 'none';
-            
-            cameraContainer.classList.remove('active');
-            document.querySelector('.camera-placeholder').style.display = 'flex';
-            
-            // Remove scanning target guide
-            const scanTarget = document.getElementById('scan-target-guide');
-            if (scanTarget) scanTarget.remove();
-            
-            // Remove guide text
-            const scanGuideText = cameraContainer.querySelector('div[style*="top: calc(50% - 70px)"]');
-            if (scanGuideText) scanGuideText.remove();
-            
-            cameraStatus.textContent = '';
-            logDebug('Camera stopped', 'info');
+        // Trigger the lookup if lookup button exists
+        if (isbnLookupButton) {
+            debug('Clicking lookup button');
+            isbnLookupButton.click();
         }
     }
+    
+    // ... existing code ...
 }
 
 // End of script
