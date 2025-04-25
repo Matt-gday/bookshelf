@@ -2331,10 +2331,52 @@ function initBarcodeScanner() {
         }
         
         // If we see a high number of transitions and a decent ratio of dark/bright pixels,
-        // it's likely a barcode
-        const hasHighTransitions = transitions > 20;
-        const hasReasonableDarkBrightRatio = darkCount > 10 && brightCount > 10;
-        const isBarcodeDetected = hasHighTransitions && hasReasonableDarkBrightRatio;
+        // it's likely a barcode - more strict thresholds
+        const hasHighTransitions = transitions > 40; // Increased from 20 to 40
+        const hasReasonableDarkBrightRatio = darkCount > 30 && brightCount > 30 && darkCount < (imageData.width/6); // More balanced ratio
+        
+        // Check for regular pattern (typical in barcodes)
+        let hasRegularPattern = false;
+        if (transitions > 20) {
+            // Count number of transitions in small segments to see if they're evenly distributed
+            const segmentCount = 5;
+            const segmentWidth = Math.floor(imageData.width / segmentCount);
+            let segmentTransitions = new Array(segmentCount).fill(0);
+            
+            lastPixelDark = false;
+            for (let i = 0; i < segmentCount; i++) {
+                for (let x = i * segmentWidth; x < (i+1) * segmentWidth; x += 3) {
+                    const idx = rowOffset + x * 4;
+                    if (idx < imageData.data.length) {
+                        const r = imageData.data[idx];
+                        const g = imageData.data[idx + 1];
+                        const b = imageData.data[idx + 2];
+                        const brightness = (r + g + b) / 3;
+                        const isDark = brightness < 100;
+                        
+                        if (x > i * segmentWidth && isDark !== lastPixelDark) {
+                            segmentTransitions[i]++;
+                        }
+                        
+                        lastPixelDark = isDark;
+                    }
+                }
+            }
+            
+            // Calculate variation between segment transitions
+            let sum = segmentTransitions.reduce((a, b) => a + b, 0);
+            let mean = sum / segmentCount;
+            let variance = segmentTransitions.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / segmentCount;
+            
+            // Low variance means regular pattern across the image
+            hasRegularPattern = (variance < 25) && (mean > 5);
+            
+            if (scanCount % 30 === 0) {
+                logDebug(`Segment transitions: ${segmentTransitions.join(', ')} | Variance: ${variance.toFixed(2)}`, 'info');
+            }
+        }
+        
+        const isBarcodeDetected = hasHighTransitions && hasReasonableDarkBrightRatio && hasRegularPattern;
         
         // Log detection metrics periodically
         if (scanCount % 30 === 0) {
@@ -2408,9 +2450,9 @@ function initBarcodeScanner() {
         
         // Add text and tap instruction
         banner.innerHTML = `
-            <div>Tap to enter the ISBN shown above the barcode</div>
+            <div>${visibleIsbn ? 'ISBN detected in barcode' : 'No ISBN detected - enter manually'}</div>
             <button id="use-visible-isbn" style="background-color: white; color: #0077cc; border: none; padding: 8px; border-radius: 4px; font-weight: bold;">
-                Use ISBN: ${visibleIsbn}
+                ${visibleIsbn ? `Use ISBN: ${visibleIsbn}` : 'Manual ISBN Entry'}
             </button>
         `;
         
@@ -2450,14 +2492,19 @@ function initBarcodeScanner() {
                 // Set the ISBN in the input field
                 const isbnManualInput = document.getElementById('isbn-manual-input');
                 if (isbnManualInput) {
-                    isbnManualInput.value = visibleIsbn;
-                    logDebug(`Set ISBN to ${visibleIsbn} via quick button`, 'success');
-                    
-                    // Trigger lookup
-                    const lookupBtn = document.getElementById('isbn-lookup-btn');
-                    if (lookupBtn) {
-                        logDebug('Clicking lookup button', 'info');
-                        lookupBtn.click();
+                    if (visibleIsbn) {
+                        isbnManualInput.value = visibleIsbn;
+                        logDebug(`Set ISBN to ${visibleIsbn} via quick button`, 'success');
+                        
+                        // Trigger lookup
+                        const lookupBtn = document.getElementById('isbn-lookup-btn');
+                        if (lookupBtn) {
+                            logDebug('Clicking lookup button', 'info');
+                            lookupBtn.click();
+                        }
+                    } else {
+                        // No ISBN provided, just focus the input for manual entry
+                        isbnManualInput.focus();
                     }
                 }
             });
