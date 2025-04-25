@@ -2318,19 +2318,11 @@ function initBarcodeScanner() {
                 
                 // Use our custom detector on the full image data but focusing on target area
                 // Check only every 45 frames (about 1.5 seconds at 30fps) - Previously 15 frames
-                if (scanCount % 45 === 0) {
+                if (scanCount % 20 === 0) {
                     if (detectBarcodeInImage(fullImageData)) {
-                        // We found a likely barcode, but add a delay before showing manual entry
-                        // to allow user time to position the barcode for actual detection
-                        if (!window.manualEntryTimeout) {
-                            window.manualEntryTimeout = setTimeout(() => {
-                                tryManualIsbnExtraction();
-                                window.manualEntryTimeout = null;
-                            }, 3000); // 3 second delay
-                            
-                            // Show a message to the user while waiting
-                            cameraStatus.textContent = "Barcode detected - hold steady while scanning...";
-                        }
+                        // We found a likely barcode pattern, but don't show manual entry popup
+                        // Just update the status
+                        cameraStatus.textContent = "Barcode pattern detected - analyzing...";
                     }
                 }
                 
@@ -2380,21 +2372,20 @@ function initBarcodeScanner() {
                         logDebug("Type error in ZXing decode, trying alternative approach", 'warning');
                         // Try to detect if there's a barcode in the image at all
                         if (detectBarcodeInImage(fullImageData)) {
-                            // Don't immediately show manual entry - let the timeout handle it
-                            if (!window.manualEntryTimeout) {
-                                window.manualEntryTimeout = setTimeout(() => {
-                                    tryManualIsbnExtraction();
-                                    window.manualEntryTimeout = null;
-                                }, 3000); // 3 second delay
-                                
-                                cameraStatus.textContent = "Barcode detected - hold steady while scanning...";
-                            }
+                            // Don't show manual entry popup, just update status
+                            cameraStatus.textContent = "Analyzing barcode pattern...";
                         }
                     } else if (shouldLog && decodeError && decodeError.message && 
                                !decodeError.message.includes("could not find finder")) {
                         logDebug(`Decode error: ${decodeError.message || decodeError.name}`, 'warning');
                     }
                 }
+                
+                // Add debug visualization for ISBN pattern detection
+                if (scanCount % 10 === 0) { // Check frequently but not every frame
+                    detectAndDisplayIsbnPattern();
+                }
+                
             } catch (error) {
                 if (error && error.message && !error.message.includes("could not find finder")) {
                     logDebug(`Scanner error: ${error.message}`, 'error');
@@ -2407,6 +2398,97 @@ function initBarcodeScanner() {
         // Continue scanning if still active
         if (scanActive) {
             requestAnimationFrame(scanBarcode);
+        }
+    }
+    
+    // Function to detect ISBN patterns in the image and display them
+    function detectAndDisplayIsbnPattern() {
+        try {
+            if (!scanActive || !cameraCanvas) return;
+            
+            // Create a temporary canvas for OCR debugging
+            const tempCanvas = document.createElement('canvas');
+            const targetWidth = Math.floor(cameraCanvas.width * 0.7);  // 70% of width
+            const targetHeight = Math.floor(cameraCanvas.height * 0.25); // 25% of height
+            const startX = Math.floor((cameraCanvas.width - targetWidth) / 2);
+            const startY = Math.floor((cameraCanvas.height - targetHeight) / 2);
+            
+            tempCanvas.width = targetWidth;
+            tempCanvas.height = targetHeight;
+            
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.drawImage(cameraVideo, 
+                startX, startY, targetWidth, targetHeight,
+                0, 0, targetWidth, targetHeight);
+            
+            // Get the image data for OCR
+            const imageData = tempCtx.getImageData(0, 0, targetWidth, targetHeight);
+            
+            // This is a mock OCR function as we don't have a real OCR library
+            // In a real implementation, you would use Tesseract.js or similar
+            mockDetectIsbnText(imageData);
+            
+        } catch (error) {
+            logDebug(`Error in ISBN pattern detection: ${error.message}`, 'error');
+        }
+    }
+    
+    // Mock function to simulate OCR detection of ISBN patterns
+    function mockDetectIsbnText(imageData) {
+        // Create or update debug info display
+        let debugInfoDisplay = document.getElementById('isbn-debug-info');
+        if (!debugInfoDisplay) {
+            debugInfoDisplay = document.createElement('div');
+            debugInfoDisplay.id = 'isbn-debug-info';
+            debugInfoDisplay.style.cssText = `
+                position: absolute;
+                top: 10px;
+                left: 10px;
+                background-color: rgba(0, 0, 0, 0.7);
+                color: white;
+                padding: 10px;
+                border-radius: 5px;
+                font-family: monospace;
+                font-size: 12px;
+                max-width: 80%;
+                z-index: 1000;
+                overflow: hidden;
+                white-space: nowrap;
+                text-overflow: ellipsis;
+            `;
+            cameraContainer.appendChild(debugInfoDisplay);
+        }
+        
+        // Update metrics display
+        debugInfoDisplay.innerHTML = `
+            <div><strong>Frame:</strong> ${scanCount}</div>
+            <div><strong>Image:</strong> ${imageData.width}x${imageData.height}</div>
+            <div><strong>Transitions:</strong> ${window.lastTransitions || 0}</div>
+            <div><strong>Dark/Bright:</strong> ${window.lastDarkCount || 0}/${window.lastBrightCount || 0}</div>
+        `;
+        
+        // If we have raw barcode data, show it
+        if (lastRawData) {
+            const div = document.createElement('div');
+            div.innerHTML = `<strong>Raw data:</strong> ${lastRawData}`;
+            debugInfoDisplay.appendChild(div);
+            
+            // Check if it contains ISBN pattern
+            const isbnMatch = lastRawData.match(/ISBN[:\s-]*(\d[\d-]*)/i);
+            if (isbnMatch) {
+                const div = document.createElement('div');
+                div.innerHTML = `<strong>ISBN found:</strong> ${isbnMatch[1]}`;
+                div.style.color = '#00ff00';
+                debugInfoDisplay.appendChild(div);
+            }
+        }
+        
+        // If we have detected barcode metrics, show them
+        if (window.lastBarcodeDetected) {
+            const div = document.createElement('div');
+            div.innerHTML = `<strong>Barcode detected:</strong> YES`;
+            div.style.color = '#00ff00';
+            debugInfoDisplay.appendChild(div);
         }
     }
     
@@ -2467,6 +2549,11 @@ function initBarcodeScanner() {
             transitions += rowTransitions;
         }
         
+        // Store metrics for debugging
+        window.lastTransitions = transitions;
+        window.lastDarkCount = darkCount;
+        window.lastBrightCount = brightCount;
+        
         // If we see a high number of transitions and a decent ratio of dark/bright pixels,
         // it's likely a barcode - more strict thresholds
         const hasHighTransitions = transitions > 50; // Increased from 40 to 50
@@ -2523,6 +2610,7 @@ function initBarcodeScanner() {
         
         // Require meeting all three criteria to detect a barcode
         const isBarcodeDetected = hasHighTransitions && hasReasonableDarkBrightRatio && hasRegularPattern;
+        window.lastBarcodeDetected = isBarcodeDetected;
         
         // Log detection metrics periodically
         if (scanCount % 30 === 0) {
@@ -2534,8 +2622,8 @@ function initBarcodeScanner() {
         
         return isBarcodeDetected;
     }
-    
-    // Try to manually extract ISBN from the canvas image
+
+    // Try to manually extract ISBN from the canvas image - NO LONGER AUTO-TRIGGERED
     function tryManualIsbnExtraction() {
         // Let's check if we can extract an ISBN from the current frame
         const canvas = document.getElementById('camera-canvas');
@@ -2546,219 +2634,210 @@ function initBarcodeScanner() {
         // Create a quick entry option without a specific ISBN
         // In a production app, you would implement actual OCR here
         createQuickIsbnButton();
-        
-        // Prompt for manual ISBN if needed
-        const isbnManualInput = document.getElementById('isbn-manual-input');
-        if (isbnManualInput && !isbnManualInput.value) {
-            cameraStatus.textContent = "Try entering the ISBN printed above the barcode";
-        }
     }
-    
-    // Create a quick entry button to enter the ISBN from the image
-    function createQuickIsbnButton(detectedIsbn = '') {
-        // Remove any existing quick entry button first
-        const existingButton = document.getElementById('quick-isbn-entry');
-        if (existingButton) {
-            existingButton.remove();
-        }
+
+    // Add a manual ISBN button to the camera interface
+    function addManualIsbnButton() {
+        // Remove existing button if any
+        const existingBtn = document.getElementById('manual-isbn-btn');
+        if (existingBtn) existingBtn.remove();
         
-        // Use the detected ISBN passed as parameter
-        const visibleIsbn = detectedIsbn;
-        
-        // Log for debugging
-        if (visibleIsbn) {
-            logDebug(`Barcode detected - ISBN appears to be ${visibleIsbn}`, 'success');
-        } else {
-            logDebug(`Barcode detected - prompting for manual entry`, 'success');
-        }
-        
-        // Create a new banner for quick ISBN entry
-        const banner = document.createElement('div');
-        banner.id = 'quick-isbn-entry';
-        banner.className = 'quick-isbn-entry';
-        banner.style.cssText = `
+        // Create manual entry button
+        const manualBtn = document.createElement('button');
+        manualBtn.id = 'manual-isbn-btn';
+        manualBtn.className = 'manual-isbn-btn';
+        manualBtn.textContent = 'Enter ISBN Manually';
+        manualBtn.style.cssText = `
             position: absolute;
-            bottom: 10px;
-            left: 10px;
-            right: 10px;
-            background-color: rgba(0, 150, 255, 0.9);
-            color: white;
-            padding: 12px;
-            border-radius: 8px;
-            text-align: center;
-            z-index: 100;
+            bottom: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(255, 255, 255, 0.9);
+            color: #0077cc;
+            border: none;
+            border-radius: 20px;
+            padding: 8px 16px;
             font-weight: bold;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
+            z-index: 100;
         `;
         
-        // Add text and tap instruction
-        banner.innerHTML = `
-            <div>${visibleIsbn ? 'ISBN detected in barcode' : 'No ISBN detected - enter manually'}</div>
-            <button id="use-visible-isbn" style="background-color: white; color: #0077cc; border: none; padding: 8px; border-radius: 4px; font-weight: bold;">
-                ${visibleIsbn ? `Use ISBN: ${visibleIsbn}` : 'Manual ISBN Entry'}
-            </button>
-        `;
-        
-        // Add to the container first so we can access the button
-        cameraContainer.appendChild(banner);
-        
-        // Add click handler for the entire banner
-        banner.addEventListener('click', function(e) {
-            // Don't trigger for button clicks (they have their own handler)
-            if (e.target.id === 'use-visible-isbn') return;
-            
-            // Stop camera
-            stopCamera();
-            
-            // Remove the banner
-            banner.remove();
-            
-            // Focus on the input field to make keyboard appear
-            const isbnManualInput = document.getElementById('isbn-manual-input');
-            if (isbnManualInput) {
-                isbnManualInput.focus();
-            }
+        manualBtn.addEventListener('click', function() {
+            tryManualIsbnExtraction();
         });
         
-        // Add click handler for the button
-        const useIsbnButton = document.getElementById('use-visible-isbn');
-        if (useIsbnButton) {
-            useIsbnButton.addEventListener('click', function(e) {
-                e.stopPropagation(); // Prevent the banner click from firing
+        cameraContainer.appendChild(manualBtn);
+    }
+
+    // Override the startCamera function to add the manual button
+    function startCamera() {
+        if (scanActive) return; // Already active
+        
+        scanActive = true;
+        
+        // Show camera elements
+        cameraContainer.classList.add('active');
+        document.querySelector('.camera-placeholder').style.display = 'none';
+        
+        // Add scanning target guide
+        const scanTarget = document.createElement('div');
+        scanTarget.id = 'scan-target-guide';
+        scanTarget.style.cssText = `
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 70%;
+            height: 25%;
+            border: 3px dashed #ff3333;
+            border-radius: 10px;
+            box-shadow: 0 0 0 2000px rgba(0, 0, 0, 0.3);
+            z-index: 10;
+        `;
+        
+        // Add text guide
+        const scanGuideText = document.createElement('div');
+        scanGuideText.style.cssText = `
+            position: absolute;
+            top: calc(50% - 70px);
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            background-color: rgba(0, 0, 0, 0.6);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            z-index: 11;
+        `;
+        scanGuideText.textContent = "Position barcode in box";
+        
+        cameraContainer.appendChild(scanTarget);
+        cameraContainer.appendChild(scanGuideText);
+        
+        // Add manual ISBN button
+        addManualIsbnButton();
+        
+        // Show camera if hidden
+        cameraVideo.removeAttribute('hidden');
+        cameraVideo.style.display = 'block';
+        
+        cameraStatus.textContent = 'Camera starting...';
+        
+        // Reset scan count and times
+        scanCount = 0;
+        lastRawData = null;
+        
+        // Clear any pending manual entry timeout
+        if (window.manualEntryTimeout) {
+            clearTimeout(window.manualEntryTimeout);
+            window.manualEntryTimeout = null;
+        }
+        
+        // Reset debug metrics
+        window.lastTransitions = 0;
+        window.lastDarkCount = 0; 
+        window.lastBrightCount = 0;
+        window.lastBarcodeDetected = false;
+        
+        // Initialize scanner if needed
+        if (!window.reader) {
+            try {
+                window.reader = new ZXing.BrowserMultiFormatReader();
+                logDebug("ZXing barcode reader initialized", 'success');
+            } catch (e) {
+                logDebug(`Failed to initialize ZXing: ${e.message}`, 'error');
+            }
+        }
+        
+        // Get camera access
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            navigator.mediaDevices.getUserMedia({ 
+                video: { 
+                    facingMode: 'environment',
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                } 
+            }).then(function(stream) {
+                if ('srcObject' in cameraVideo) {
+                    cameraVideo.srcObject = stream;
+                } else {
+                    // Fallback for older browsers
+                    cameraVideo.src = window.URL.createObjectURL(stream);
+                }
+                cameraVideo.play();
                 
-                // Stop camera
-                stopCamera();
+                // Show helpful instructions in the status area
+                cameraStatus.textContent = 'Position barcode in red box and hold steady';
                 
-                // Remove the banner
-                banner.remove();
-                
-                // Set the ISBN in the input field
-                const isbnManualInput = document.getElementById('isbn-manual-input');
-                if (isbnManualInput) {
-                    if (visibleIsbn) {
-                        isbnManualInput.value = visibleIsbn;
-                        logDebug(`Set ISBN to ${visibleIsbn} via quick button`, 'success');
-                        
-                        // Trigger lookup
-                        const lookupBtn = document.getElementById('isbn-lookup-btn');
-                        if (lookupBtn) {
-                            logDebug('Clicking lookup button', 'info');
-                            lookupBtn.click();
-                        }
-                    } else {
-                        // No ISBN provided, just focus the input for manual entry
-                        isbnManualInput.focus();
+                // After 3 seconds, show a more detailed hint
+                setTimeout(() => {
+                    if (scanActive) {
+                        cameraStatus.textContent = 'Make sure barcode is well-lit and not blurry';
                     }
-                }
+                }, 3000);
+                
+                // After 10 seconds, show a patience message
+                setTimeout(() => {
+                    if (scanActive) {
+                        cameraStatus.textContent = 'Still scanning... Use manual button if needed';
+                    }
+                }, 10000);
+                
+                // Start scanning
+                scanBarcode();
+                
+            }).catch(function(error) {
+                logDebug(`Camera error: ${error.name}: ${error.message}`, 'error');
+                cameraStatus.textContent = `Camera error: ${error.message}`;
+                scanActive = false;
             });
-        }
-    }
-    
-    // Process barcode data to extract ISBN
-    function processCodeData(rawData) {
-        if (!rawData) return;
-        
-        logDebug(`Processing code data: "${rawData}"`, 'info');
-        
-        // 1. Direct ISBN match (10 or 13 digits)
-        let isbn = rawData.replace(/[^0-9X]/gi, '');
-        if (/^(97(8|9))?\d{9}[\dX]$/i.test(isbn)) {
-            logDebug(`Direct ISBN match: ${isbn}`, 'success');
-            // Create quick button with detected ISBN, but still allow manual entry
-            createQuickIsbnButton(isbn);
-            handleIsbnFound(isbn);
-            return;
-        }
-        
-        // 2. Check for embedded ISBN-13 (starts with 978 or 979)
-        let isbnMatch = rawData.match(/(978|979)\d{10}/);
-        if (isbnMatch) {
-            logDebug(`Embedded ISBN-13 match: ${isbnMatch[0]}`, 'success');
-            // Create quick button with detected ISBN, but still allow manual entry
-            createQuickIsbnButton(isbnMatch[0]);
-            handleIsbnFound(isbnMatch[0]);
-            return;
-        }
-        
-        // 3. Check for ISBN format with hyphens
-        isbnMatch = rawData.match(/(?:ISBN(?:-13)?:?\s*)?(?=[0-9X]{13}$|(?=(?:[0-9]+[-\s]){3})[-\s0-9X]{17}$)97[89][-\s]?[0-9]{1,5}[-\s]?[0-9]+[-\s]?[0-9]+[-\s]?[0-9X]/i);
-        if (isbnMatch) {
-            const extractedIsbn = isbnMatch[0].replace(/[^0-9X]/gi, '');
-            logDebug(`ISBN-13 with hyphens match: ${extractedIsbn}`, 'success');
-            // Create quick button with detected ISBN, but still allow manual entry
-            createQuickIsbnButton(extractedIsbn);
-            handleIsbnFound(extractedIsbn);
-            return;
-        }
-        
-        // 4. Check for ISBN-10
-        isbnMatch = rawData.match(/(?:ISBN(?:-10)?:?\s*)?(?=[0-9X]{10}$|(?=(?:[0-9]+[-\s]){3})[-\s0-9X]{13}$)[0-9]{1,5}[-\s]?[0-9]+[-\s]?[0-9]+[-\s]?[0-9X]/i);
-        if (isbnMatch) {
-            const extractedIsbn = isbnMatch[0].replace(/[^0-9X]/gi, '');
-            logDebug(`ISBN-10 match: ${extractedIsbn}`, 'success');
-            // Create quick button with detected ISBN, but still allow manual entry
-            createQuickIsbnButton(extractedIsbn);
-            handleIsbnFound(extractedIsbn);
-            return;
-        }
-        
-        // 5. Try to extract any 10-13 digit number that could be an ISBN
-        const digits = rawData.replace(/[^0-9]/g, '');
-        logDebug(`Extracted digits: ${digits}`, 'info');
-        
-        for (let i = 0; i <= digits.length - 10; i++) {
-            // Try ISBN-13
-            if (i <= digits.length - 13) {
-                const potential13 = digits.substr(i, 13);
-                if (potential13.startsWith('978') || potential13.startsWith('979')) {
-                    logDebug(`Found potential ISBN-13: ${potential13}`, 'success');
-                    // Create quick button with detected ISBN, but still allow manual entry
-                    createQuickIsbnButton(potential13);
-                    handleIsbnFound(potential13);
-                    return;
-                }
-            }
-            
-            // Try ISBN-10
-            const potential10 = digits.substr(i, 10);
-            if (/^[0-9]{9}[0-9X]$/i.test(potential10)) {
-                logDebug(`Found potential ISBN-10: ${potential10}`, 'success');
-                // Create quick button with detected ISBN, but still allow manual entry
-                createQuickIsbnButton(potential10);
-                handleIsbnFound(potential10);
-                return;
-            }
-        }
-        
-        // If we got this far, we couldn't extract an ISBN
-        logDebug("No ISBN pattern found in barcode data", 'warning');
-        // Still allow manual entry even if no ISBN was detected
-        createQuickIsbnButton('');
-        cameraStatus.textContent = "Barcode detected, but no ISBN found. Try again.";
-    }
-    
-    // Handle when an ISBN is successfully found
-    function handleIsbnFound(isbn) {
-        logDebug(`*** ISBN FOUND: ${isbn} ***`, 'success');
-        
-        // Update the manual ISBN input field
-        const isbnManualInput = document.getElementById('isbn-manual-input');
-        if (isbnManualInput) {
-            isbnManualInput.value = isbn;
-            logDebug(`Updated input field with ISBN: ${isbn}`, 'success');
         } else {
-            logDebug("Could not find ISBN input field!", 'error');
-            return; // Cannot proceed without the input field
+            logDebug('getUserMedia not supported', 'error');
+            cameraStatus.textContent = 'Camera not supported in this browser';
+            scanActive = false;
+        }
+    }
+    
+    function stopCamera() {
+        scanActive = false;
+        
+        // Clear any pending timeout for manual entry
+        if (window.manualEntryTimeout) {
+            clearTimeout(window.manualEntryTimeout);
+            window.manualEntryTimeout = null;
         }
         
-        cameraStatus.textContent = `ISBN detected: ${isbn}. Use button below or verify manually.`;
+        // Remove debug info display
+        const debugInfo = document.getElementById('isbn-debug-info');
+        if (debugInfo) debugInfo.remove();
         
-        // Don't automatically stop camera or trigger lookup
-        // This allows the user to check if the detected ISBN is correct
-        // The lookup will be triggered by the quick entry button if the user clicks it
+        // Remove manual ISBN button
+        const manualBtn = document.getElementById('manual-isbn-btn');
+        if (manualBtn) manualBtn.remove();
+        
+        if (cameraVideo && cameraVideo.srcObject) {
+            const stream = cameraVideo.srcObject;
+            const tracks = stream.getTracks();
+            
+            tracks.forEach(track => track.stop());
+            
+            cameraVideo.srcObject = null;
+            cameraVideo.setAttribute('hidden', '');
+            cameraVideo.style.display = 'none';
+            
+            cameraContainer.classList.remove('active');
+            document.querySelector('.camera-placeholder').style.display = 'flex';
+            
+            // Remove scanning target guide
+            const scanTarget = document.getElementById('scan-target-guide');
+            if (scanTarget) scanTarget.remove();
+            
+            // Remove guide text
+            const scanGuideText = cameraContainer.querySelector('div[style*="top: calc(50% - 70px)"]');
+            if (scanGuideText) scanGuideText.remove();
+            
+            cameraStatus.textContent = '';
+            logDebug('Camera stopped', 'info');
+        }
     }
 }
 
