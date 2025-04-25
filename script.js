@@ -2126,6 +2126,25 @@ function initBarcodeScanner() {
         });
     }
     
+    // Add event listener to ISBN input field to auto-trigger lookup when a complete ISBN is entered
+    const isbnManualInput = document.getElementById('isbn-manual-input');
+    if (isbnManualInput) {
+        isbnManualInput.addEventListener('input', function() {
+            // Remove spaces, hyphens, etc. to get just the digits
+            const isbn = this.value.replace(/[^0-9X]/gi, '');
+            
+            // Check if we have a complete ISBN (10 or 13 digits)
+            if (/^(97(8|9))?\d{9}[\dX]$/i.test(isbn)) {
+                // We have a complete ISBN, trigger lookup
+                const lookupBtn = document.getElementById('isbn-lookup-btn');
+                if (lookupBtn) {
+                    logDebug(`Auto-triggering lookup for ISBN: ${isbn}`, 'success');
+                    lookupBtn.click();
+                }
+            }
+        });
+    }
+    
     function toggleCamera() {
         if (cameraStream) {
             stopCamera();
@@ -2234,54 +2253,52 @@ function initBarcodeScanner() {
                 canvasContext.drawImage(cameraVideo, 0, 0, cameraCanvas.width, cameraCanvas.height);
                 
                 // Check if the barcode is visible in the image by examining the data
-                // This creates a secondary method to detect the barcode
-                try {
-                    const imageData = canvasContext.getImageData(0, 0, cameraCanvas.width, cameraCanvas.height);
-                    
-                    // MANUAL BARCODE CHECK - Look for "ISBN" text directly in the image
-                    if (scanCount % 15 === 0) { // Check every 15 frames
-                        logDebug("Trying manual ISBN extraction from image", 'info');
-                        // Try to extract the ISBN directly from the image using pattern recognition
+                const imageData = canvasContext.getImageData(0, 0, cameraCanvas.width, cameraCanvas.height);
+                
+                // Check if we can detect a barcode pattern even if we can't decode it
+                if (scanCount % 15 === 0) { // Every 15 frames
+                    if (detectBarcodeInImage(imageData)) {
+                        // We found a likely barcode, offer manual entry
                         tryManualIsbnExtraction();
                     }
-                    
-                    // ZXING BARCODE CHECK - Try standard barcode scanning
-                    if (!window.reader) {
-                        if (shouldLog) {
-                            logDebug("ZXing reader not initialized", 'error');
-                        }
-                        return;
+                }
+                
+                // ZXING BARCODE CHECK - Try standard barcode scanning
+                if (!window.reader) {
+                    if (shouldLog) {
+                        logDebug("ZXing reader not initialized", 'error');
                     }
+                    return;
+                }
+                
+                try {
+                    // Try basic decode 
+                    const code = window.reader.decode(imageData);
                     
-                    try {
-                        // Try basic decode 
-                        const code = window.reader.decode(imageData);
-                        
-                        if (code && code.text) {
-                            if (code.text !== lastRawData) {
-                                lastRawData = code.text;
-                                logDebug(`Barcode detected: "${code.text}"`, 'success');
-                                processCodeData(code.text);
-                            }
+                    if (code && code.text) {
+                        if (code.text !== lastRawData) {
+                            lastRawData = code.text;
+                            logDebug(`Barcode detected: "${code.text}"`, 'success');
+                            processCodeData(code.text);
                         }
-                    } catch (decodeError) {
-                        // Fallback for Type errors - try to extract the ISBN from the visible text
-                        if (decodeError && decodeError.name === 'TypeError') {
-                            logDebug("Type error in ZXing decode, trying alternative approach", 'warning');
-                            // Use the ISBN at the top of the barcode that we can see in the image
+                    }
+                } catch (decodeError) {
+                    // Fallback for Type errors - try to extract the ISBN from the visible text
+                    if (decodeError && decodeError.name === 'TypeError') {
+                        logDebug("Type error in ZXing decode, trying alternative approach", 'warning');
+                        // Try to detect if there's a barcode in the image at all
+                        if (detectBarcodeInImage(imageData)) {
                             tryManualIsbnExtraction();
-                        } else if (shouldLog && decodeError && decodeError.message && 
-                                   !decodeError.message.includes("could not find finder")) {
-                            logDebug(`Decode error: ${decodeError.message || decodeError.name}`, 'warning');
                         }
-                    }
-                } catch (error) {
-                    if (error && error.message && !error.message.includes("could not find finder")) {
-                        logDebug(`Scanner error: ${error.message}`, 'error');
+                    } else if (shouldLog && decodeError && decodeError.message && 
+                               !decodeError.message.includes("could not find finder")) {
+                        logDebug(`Decode error: ${decodeError.message || decodeError.name}`, 'warning');
                     }
                 }
-            } catch (drawError) {
-                logDebug(`Error processing camera frame: ${drawError.message}`, 'error');
+            } catch (error) {
+                if (error && error.message && !error.message.includes("could not find finder")) {
+                    logDebug(`Scanner error: ${error.message}`, 'error');
+                }
             }
         } else if (shouldLog) {
             logDebug("Camera feed not ready yet", 'info');
@@ -2293,22 +2310,123 @@ function initBarcodeScanner() {
         }
     }
     
+    // Helper to detect barcode patterns in the image
+    function detectBarcodeInImage(imageData) {
+        // Simple barcode detection based on alternating black/white patterns
+        // This is a very basic approach and won't work for all barcodes
+        // but should help detect when a barcode is likely present
+        
+        // Get a horizontal slice from the middle of the image
+        const middleY = Math.floor(imageData.height / 2);
+        const rowOffset = middleY * imageData.width * 4;
+        
+        let transitions = 0;
+        let lastPixelDark = false;
+        let darkCount = 0;
+        let brightCount = 0;
+        
+        // Sample every 5th pixel in the row to check for barcode-like patterns
+        for (let x = 0; x < imageData.width; x += 3) {
+            const idx = rowOffset + x * 4;
+            const r = imageData.data[idx];
+            const g = imageData.data[idx + 1];
+            const b = imageData.data[idx + 2];
+            
+            // Calculate pixel brightness
+            const brightness = (r + g + b) / 3;
+            
+            // Check if this is a dark pixel (likely part of barcode)
+            const isDark = brightness < 100;
+            
+            if (isDark) {
+                darkCount++;
+            } else {
+                brightCount++;
+            }
+            
+            // Count transitions from dark to bright or bright to dark
+            if (x > 0 && isDark !== lastPixelDark) {
+                transitions++;
+            }
+            
+            lastPixelDark = isDark;
+        }
+        
+        // If we see a high number of transitions and a decent ratio of dark/bright pixels,
+        // it's likely a barcode
+        const hasHighTransitions = transitions > 20;
+        const hasReasonableDarkBrightRatio = darkCount > 10 && brightCount > 10;
+        
+        return hasHighTransitions && hasReasonableDarkBrightRatio;
+    }
+    
     // Try to manually extract ISBN from the canvas image
     function tryManualIsbnExtraction() {
-        // Since we can see ISBN 978-1-78683-196-5 on the image, let's try to manually extract 
-        // any visible ISBNs from the barcode area through direct user input
+        // Since we can see the ISBN printed on the image, let's create a quick entry option
         
-        // Ask the user to manually enter what they see
         logDebug("Please enter the ISBN visible on the barcode (usually at top)", 'info');
+        
+        // Create a quick entry button for what we see in the image
+        createQuickIsbnButton();
         
         // Prompt for manual ISBN if needed
         const isbnManualInput = document.getElementById('isbn-manual-input');
         if (isbnManualInput && !isbnManualInput.value) {
             cameraStatus.textContent = "Try entering the ISBN printed above the barcode";
         }
+    }
+    
+    // Create a quick entry button to enter the ISBN from the image
+    function createQuickIsbnButton() {
+        // Remove any existing quick entry button first
+        const existingButton = document.getElementById('quick-isbn-entry');
+        if (existingButton) {
+            existingButton.remove();
+        }
         
-        // As a fallback, let the user enter it manually
-        // We could also implement OCR here but it's beyond the scope of this fix
+        // Create a new banner for quick ISBN entry
+        const banner = document.createElement('div');
+        banner.id = 'quick-isbn-entry';
+        banner.className = 'quick-isbn-entry';
+        banner.style.cssText = `
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            right: 10px;
+            background-color: rgba(0, 150, 255, 0.9);
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+            z-index: 100;
+            font-weight: bold;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        `;
+        
+        // Add text and tap instruction
+        banner.innerHTML = `
+            <div>Tap to enter the ISBN shown above the barcode</div>
+        `;
+        
+        // Add click handler to enter the ISBN from the image
+        banner.addEventListener('click', function() {
+            // Stop camera
+            stopCamera();
+            
+            // Remove the banner
+            banner.remove();
+            
+            // Ask the user to enter the value they see
+            // Simplified from just accepting what we see
+            const isbnManualInput = document.getElementById('isbn-manual-input');
+            if (isbnManualInput) {
+                // Focus on the input field to make keyboard appear
+                isbnManualInput.focus();
+            }
+        });
+        
+        // Add the banner to the camera container
+        cameraContainer.appendChild(banner);
     }
     
     // Process barcode data to extract ISBN
