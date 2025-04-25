@@ -2116,12 +2116,28 @@ function initBarcodeScanner() {
                 scanTargetGuide.style.position = 'absolute';
                 scanTargetGuide.style.top = '50%';
                 scanTargetGuide.style.left = '50%';
-                scanTargetGuide.style.width = '60%';
+                scanTargetGuide.style.width = '70%';
                 scanTargetGuide.style.height = '25%';
                 scanTargetGuide.style.transform = 'translate(-50%, -50%)';
                 scanTargetGuide.style.pointerEvents = 'none';
                 scanTargetGuide.style.zIndex = '10';
                 scanTargetGuide.style.borderRadius = '8px';
+                scanTargetGuide.style.border = '3px dashed #ff6b92';
+                scanTargetGuide.style.boxShadow = '0 0 0 2000px rgba(0, 0, 0, 0.3)';
+                
+                // Add instruction text inside the guide
+                const instructionText = document.createElement('div');
+                instructionText.textContent = 'Place barcode here';
+                instructionText.style.position = 'absolute';
+                instructionText.style.bottom = '-40px';
+                instructionText.style.left = '0';
+                instructionText.style.right = '0';
+                instructionText.style.textAlign = 'center';
+                instructionText.style.color = 'white';
+                instructionText.style.fontWeight = 'bold';
+                instructionText.style.textShadow = '0 0 4px black';
+                scanTargetGuide.appendChild(instructionText);
+                
                 cameraContainer.appendChild(scanTargetGuide);
             }
             
@@ -2326,54 +2342,74 @@ function initBarcodeScanner() {
                         }
                     }
                     
-                    // Try processing with different image parameters to improve detection
+                    // SIMPLIFIED APPROACH: Try with three different methods in sequence
                     let result = null;
                     
-                    // First attempt with the target area
+                    // Method 1: Direct decode of full frame
                     try {
-                        debug('Attempting to decode barcode from target area...');
-                        result = window.reader.decode(imageData.data, imageData.width, imageData.height);
+                        const fullImageData = ctx.getImageData(0, 0, canvasElem.width, canvasElem.height);
+                        result = window.reader.decode(fullImageData.data, fullImageData.width, fullImageData.height);
+                        debug('Successfully decoded full frame barcode');
                     } catch (e) {
-                        debug('Failed to decode from target area: ' + e.message);
+                        debug('Full frame decode failed: ' + e.message);
                     }
                     
-                    // If that fails, try with the full frame
+                    // Method 2: If that fails, try the target area with enhanced contrast
                     if (!result) {
                         try {
-                            debug('Attempting to decode from full frame...');
-                            const fullImageData = ctx.getImageData(0, 0, canvasElem.width, canvasElem.height);
-                            result = window.reader.decode(fullImageData.data, fullImageData.width, fullImageData.height);
-                        } catch (e) {
-                            debug('Failed to decode from full frame: ' + e.message);
-                        }
-                    }
-                    
-                    // If that fails, try with contrast enhancement
-                    if (!result) {
-                        try {
-                            debug('Attempting to decode with enhanced contrast...');
                             // Create enhanced version with better contrast
-                            const targetCtxEnhanced = targetCanvas.getContext('2d');
-                            targetCtxEnhanced.filter = 'contrast(1.5) brightness(1.2)';
-                            targetCtxEnhanced.drawImage(
+                            const targetCtx = targetCanvas.getContext('2d');
+                            targetCtx.filter = 'contrast(1.8) brightness(1.1)';
+                            targetCtx.drawImage(
                                 canvasElem, 
                                 targetX, targetY, targetWidth, targetHeight,
                                 0, 0, targetWidth, targetHeight
                             );
-                            const enhancedImageData = targetCtxEnhanced.getImageData(0, 0, targetWidth, targetHeight);
+                            
+                            // Show the target canvas for debugging
+                            targetCanvas.style.position = 'absolute';
+                            targetCanvas.style.top = '10px';
+                            targetCanvas.style.left = '10px';
+                            targetCanvas.style.border = '2px solid red';
+                            targetCanvas.style.zIndex = '100';
+                            targetCanvas.style.width = '80px';
+                            targetCanvas.style.height = '40px';
+                            cameraContainer.appendChild(targetCanvas);
+                            
+                            const enhancedImageData = targetCtx.getImageData(0, 0, targetWidth, targetHeight);
                             result = window.reader.decode(enhancedImageData.data, enhancedImageData.width, enhancedImageData.height);
+                            debug('Successfully decoded enhanced target area barcode');
                         } catch (e) {
-                            debug('Failed to decode with enhanced contrast: ' + e.message);
+                            debug('Enhanced target area decode failed: ' + e.message);
                         }
                     }
                     
+                    // Method 3: If both fail, try the target area with inverted colors
+                    if (!result) {
+                        try {
+                            const targetCtx = targetCanvas.getContext('2d');
+                            targetCtx.filter = 'invert(100%) contrast(1.2)';
+                            targetCtx.drawImage(
+                                canvasElem, 
+                                targetX, targetY, targetWidth, targetHeight,
+                                0, 0, targetWidth, targetHeight
+                            );
+                            const invertedImageData = targetCtx.getImageData(0, 0, targetWidth, targetHeight);
+                            result = window.reader.decode(invertedImageData.data, invertedImageData.width, invertedImageData.height);
+                            debug('Successfully decoded inverted target area barcode');
+                        } catch (e) {
+                            debug('Inverted target area decode failed: ' + e.message);
+                        }
+                    }
+                    
+                    // Process the result if we got one
                     if (result && result.text) {
                         debug('ZXing decoded: ' + result.text);
                         processCodeData(result.text);
                         return;
                     } else {
                         debug('ZXing decoder did not return a result');
-                        cameraStatus.textContent = 'Barcode detected but could not read ISBN. Try entering manually.';
+                        cameraStatus.textContent = 'Barcode detected but could not read. Try entering manually.';
                     }
                 } catch (decodeError) {
                     debug('ZXing decode error: ' + decodeError.message);
@@ -2561,90 +2597,60 @@ function initBarcodeScanner() {
         // Log the raw data to console for debugging
         console.log('Raw scanned data:', rawData);
         
-        // Normalize the data by removing any whitespace and converting to uppercase
-        const normalizedData = rawData.replace(/\s+/g, '').toUpperCase();
-        debug('Normalized data: ' + normalizedData);
+        // Clean up the scanned data - remove whitespace and non-alphanumeric characters
+        const cleanedData = rawData.replace(/\s+/g, '').replace(/[^a-zA-Z0-9]/g, '');
+        console.log('Cleaned data:', cleanedData);
         
-        // Pattern for direct ISBN match (10 or 13 digits, possibly with hyphens)
-        const isbnPattern = /(?:ISBN(?:-1[03])?:?\s*)?(?=[-0-9 ]{17}|[-0-9X ]{13})(?:97[89][-\s]?)?[0-9]{1,5}[-\s]?[0-9]+[-\s]?[0-9]+[-\s]?[0-9X]/i;
+        // SIMPLIFIED APPROACH: First directly check if the data is an EAN-13 that starts with 978/979
+        if (/^(978|979)\d{10}$/.test(cleanedData)) {
+            // This is an ISBN-13 in EAN format - use it directly!
+            const isbn = cleanedData;
+            debug('Found ISBN-13 in EAN format: ' + isbn);
+            handleIsbnFound(isbn);
+            return;
+        }
         
-        // Pattern for embedded ISBN (preceeded by text like "ISBN: ")
-        const embeddedIsbnPattern = /ISBN[-: ]*(97[89][-\s]?)?[0-9]{1,5}[-\s]?[0-9]+[-\s]?[0-9]+[-\s]?[0-9X]/i;
+        // Check for a 10-digit ISBN without prefix
+        if (/^\d{9}[\dX]$/.test(cleanedData)) {
+            const isbn = cleanedData;
+            debug('Found ISBN-10: ' + isbn);
+            handleIsbnFound(isbn);
+            return;
+        }
         
-        // Pattern for just 10 or 13 consecutive digits (potential raw ISBN)
-        const digitsOnlyPattern = /\b\d{10}\b|\b\d{13}\b/;
+        // If the data is longer, try to extract an ISBN pattern from it
+        const isbn13Match = cleanedData.match(/(978|979)\d{10}/);
+        if (isbn13Match) {
+            const isbn = isbn13Match[0];
+            debug('Extracted ISBN-13 from longer string: ' + isbn);
+            handleIsbnFound(isbn);
+            return;
+        }
         
-        // EAN-13 that might be an ISBN (starts with 978 or 979)
-        const ean13Pattern = /^(978|979)\d{10}$/;
+        const isbn10Match = cleanedData.match(/\d{9}[\dX]/);
+        if (isbn10Match) {
+            const isbn = isbn10Match[0];
+            debug('Extracted ISBN-10 from longer string: ' + isbn);
+            handleIsbnFound(isbn);
+            return;
+        }
         
+        // If we still don't have an ISBN, try the old patterns as fallback
         let isbn = null;
         
-        // Try direct ISBN format first
-        const isbnMatch = rawData.match(isbnPattern);
-        if (isbnMatch) {
-            isbn = isbnMatch[0];
-            debug('Found ISBN format: ' + isbn);
-        }
-        // Then try embedded ISBN format
-        else if (!isbn) {
-            const embeddedMatch = rawData.match(embeddedIsbnPattern);
-            if (embeddedMatch) {
-                // Extract just the digits and X if present
-                isbn = embeddedMatch[0].replace(/ISBN[-: ]*/i, '');
-                debug('Found embedded ISBN: ' + isbn);
-            }
-        }
-        // Check for EAN-13 that might be an ISBN
-        else if (!isbn) {
-            const eanMatch = normalizedData.match(ean13Pattern);
-            if (eanMatch) {
-                isbn = eanMatch[0];
-                debug('Found EAN-13 that appears to be an ISBN: ' + isbn);
-            }
-        }
-        // Finally try just finding 10 or 13 consecutive digits
-        else if (!isbn) {
-            const digitsMatch = rawData.match(digitsOnlyPattern);
-            if (digitsMatch) {
-                isbn = digitsMatch[0];
-                debug('Found potential raw ISBN: ' + isbn);
-            }
+        // Pattern for direct ISBN match (with "ISBN:" prefix)
+        const isbnLabelMatch = rawData.match(/ISBN[:\-]?\s*(97[89]\d{10}|\d{9}[\dX])/i);
+        if (isbnLabelMatch) {
+            isbn = isbnLabelMatch[1].replace(/[^0-9X]/gi, '');
+            debug('Found ISBN with label: ' + isbn);
+            handleIsbnFound(isbn);
+            return;
         }
         
-        // If we found any potential ISBN candidate
-        if (isbn) {
-            // Remove any non-digit/X characters
-            isbn = isbn.replace(/[^0-9X]/gi, '');
-            
-            // Check for 13-digit EAN that starts with 978 or 979 (ISBN prefix)
-            if (isbn.length === 13 && (isbn.startsWith('978') || isbn.startsWith('979'))) {
-                debug('Found ISBN-13 (EAN format): ' + isbn);
-                handleIsbnFound(isbn);
-                return;
-            }
-            
-            // Validate ISBN length
-            if (isbn.length === 10 || isbn.length === 13) {
-                debug('Extracted valid ISBN: ' + isbn);
-                handleIsbnFound(isbn);
-            } else {
-                debug('Invalid ISBN length: ' + isbn.length);
-                // Try to recover common patterns
-                if (isbn.length > 13) {
-                    // Try to extract valid ISBN from longer string
-                    const extracted = extractValidIsbnFromString(isbn);
-                    if (extracted) {
-                        debug('Recovered ISBN from longer string: ' + extracted);
-                        handleIsbnFound(extracted);
-                        return;
-                    }
-                }
-                tryManualIsbnExtraction();
-            }
-        } else {
-            debug('No ISBN pattern found in: ' + rawData);
-            tryManualIsbnExtraction();
-        }
+        // If nothing worked, ask for manual entry
+        debug('No ISBN pattern found in: ' + rawData);
+        cameraStatus.textContent = 'Barcode detected but no ISBN found. Please enter manually.';
+        tryManualIsbnExtraction();
     }
     
     // Helper function to try to extract valid ISBN from a longer string
