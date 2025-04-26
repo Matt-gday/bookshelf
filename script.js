@@ -2109,6 +2109,12 @@ function initBarcodeScanner() {
                 cameraPlaceholder.style.display = 'none';
             }
             
+            // Make sure canvas is hidden at start
+            const canvas = document.getElementById('camera-canvas');
+            if (canvas) {
+                canvas.style.display = 'none';
+            }
+            
             // Create our scan target guide if it doesn't exist
             if (!scanTargetGuide) {
                 scanTargetGuide = document.createElement('div');
@@ -2181,7 +2187,8 @@ function initBarcodeScanner() {
                 video: {
                     facingMode: "environment",
                     width: { ideal: 1280 },
-                    height: { ideal: 720 }
+                    height: { ideal: 720 },
+                    zoom: true // Request zoom capability if available
                 },
                 audio: false
             };
@@ -2198,6 +2205,9 @@ function initBarcodeScanner() {
             videoActive = true;
             cameraStatus.textContent = 'Position barcode in the frame and tap the button';
             debug('Camera started');
+            
+            // Add zoom controls
+            addZoomControls();
             
         } catch (error) {
             console.error("Error starting camera:", error);
@@ -2256,6 +2266,10 @@ function initBarcodeScanner() {
         canvas.style.margin = '0 auto';
         canvas.style.border = '1px solid #ddd';
         
+        // Get the debug info element or create it if needed
+        const debugInfo = document.getElementById('camera-debug-info') || createDebugInfoElement();
+        debugInfo.style.display = 'block'; // Make sure debug info is visible
+        
         // Stop the video to show the captured image
         stopVideo();
         
@@ -2266,9 +2280,6 @@ function initBarcodeScanner() {
         const barcodeDetected = showRawScanDebug(imageData);
         
         console.log('Captured image, scanning for barcode...');
-        
-        // Get or create debug info element once
-        const debugInfo = document.getElementById('camera-debug-info');
         
         try {
             // Try to decode with ZXing
@@ -2338,165 +2349,100 @@ function initBarcodeScanner() {
         }
     }
     
-    // Function to show raw scan debug information with enhanced visualization
-    function showRawScanDebug(imageData) {
-        const width = imageData.width;
-        const height = imageData.height;
-        const data = imageData.data;
+    // Add digital zoom controls to the camera
+    function addZoomControls() {
+        let zoomLevel = 1.0;
+        const zoomStep = 0.1;
+        const maxZoom = 3.0;
         
-        // Create or get the debug info element
-        let debugElement = document.getElementById('barcode-debug-info');
-        if (!debugElement) {
-            debugElement = document.createElement('div');
-            debugElement.id = 'barcode-debug-info';
-            debugElement.style.fontFamily = 'monospace';
-            debugElement.style.fontSize = '12px';
-            debugElement.style.marginTop = '10px';
-            debugElement.style.padding = '10px';
-            debugElement.style.backgroundColor = '#f0f0f0';
-            debugElement.style.borderRadius = '5px';
-            debugElement.style.overflow = 'auto';
-            debugElement.style.maxHeight = '500px';
-            
-            const debugArea = document.getElementById('debug-area');
-            if (debugArea) {
-                debugArea.appendChild(debugElement);
-            } else {
-                document.body.appendChild(debugElement);
+        // Remove existing controls if any
+        const existingControls = document.getElementById('camera-zoom-controls');
+        if (existingControls) {
+            existingControls.remove();
+        }
+        
+        // Create zoom controls container
+        const zoomControls = document.createElement('div');
+        zoomControls.id = 'camera-zoom-controls';
+        zoomControls.style.position = 'absolute';
+        zoomControls.style.top = '10px';
+        zoomControls.style.right = '10px';
+        zoomControls.style.display = 'flex';
+        zoomControls.style.flexDirection = 'column';
+        zoomControls.style.zIndex = '100';
+        
+        // Create zoom in button
+        const zoomInBtn = document.createElement('button');
+        zoomInBtn.innerHTML = '<span class="material-symbols-outlined">zoom_in</span>';
+        zoomInBtn.style.width = '40px';
+        zoomInBtn.style.height = '40px';
+        zoomInBtn.style.borderRadius = '50%';
+        zoomInBtn.style.backgroundColor = 'rgba(255, 255, 255, 0.7)';
+        zoomInBtn.style.border = 'none';
+        zoomInBtn.style.boxShadow = '0 2px 5px rgba(0, 0, 0, 0.2)';
+        zoomInBtn.style.margin = '5px';
+        zoomInBtn.style.cursor = 'pointer';
+        
+        // Create zoom out button
+        const zoomOutBtn = document.createElement('button');
+        zoomOutBtn.innerHTML = '<span class="material-symbols-outlined">zoom_out</span>';
+        zoomOutBtn.style.width = '40px';
+        zoomOutBtn.style.height = '40px';
+        zoomOutBtn.style.borderRadius = '50%';
+        zoomOutBtn.style.backgroundColor = 'rgba(255, 255, 255, 0.7)';
+        zoomOutBtn.style.border = 'none';
+        zoomOutBtn.style.boxShadow = '0 2px 5px rgba(0, 0, 0, 0.2)';
+        zoomOutBtn.style.margin = '5px';
+        zoomOutBtn.style.cursor = 'pointer';
+        
+        // Create zoom indicator
+        const zoomIndicator = document.createElement('div');
+        zoomIndicator.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+        zoomIndicator.style.color = 'white';
+        zoomIndicator.style.padding = '5px';
+        zoomIndicator.style.borderRadius = '10px';
+        zoomIndicator.style.textAlign = 'center';
+        zoomIndicator.style.margin = '5px';
+        zoomIndicator.style.fontSize = '12px';
+        zoomIndicator.textContent = `${zoomLevel.toFixed(1)}x`;
+        
+        // Add event listeners
+        zoomInBtn.addEventListener('click', () => {
+            if (zoomLevel < maxZoom) {
+                zoomLevel += zoomStep;
+                applyZoom();
+            }
+        });
+        
+        zoomOutBtn.addEventListener('click', () => {
+            if (zoomLevel > 1.0) {
+                zoomLevel -= zoomStep;
+                applyZoom();
+            }
+        });
+        
+        // Function to apply zoom
+        function applyZoom() {
+            if (videoElem) {
+                zoomLevel = Math.min(Math.max(zoomLevel, 1.0), maxZoom);
+                zoomIndicator.textContent = `${zoomLevel.toFixed(1)}x`;
+                
+                // Apply transform to zoom
+                videoElem.style.transform = `scale(${zoomLevel})`;
+                videoElem.style.transformOrigin = 'center';
             }
         }
         
-        // Clear previous debug info
-        debugElement.innerHTML = '';
+        // Add to DOM
+        zoomControls.appendChild(zoomInBtn);
+        zoomControls.appendChild(zoomIndicator);
+        zoomControls.appendChild(zoomOutBtn);
         
-        // Add title and image dimensions
-        const titleEl = document.createElement('h4');
-        titleEl.textContent = 'Barcode Scan Debug';
-        titleEl.style.margin = '0 0 10px 0';
-        debugElement.appendChild(titleEl);
-        
-        const dimensionsEl = document.createElement('p');
-        dimensionsEl.textContent = `Image dimensions: ${width}x${height}`;
-        debugElement.appendChild(dimensionsEl);
-        
-        // Visualize the middle line of the image data
-        const visualizationEl = document.createElement('div');
-        visualizationEl.innerHTML = '<h5>Middle Row Visualization</h5>';
-        visualizationEl.innerHTML += '<p>Each block represents brightness level (darker = black pixel, lighter = white pixel)</p>';
-        visualizationEl.innerHTML += '<p>A barcode should appear as alternating dark/light bands</p>';
-        
-        const middleY = Math.floor(height / 2);
-        const sampleSection = document.createElement('div');
-        sampleSection.style.display = 'flex';
-        sampleSection.style.overflowX = 'auto';
-        sampleSection.style.height = '25px';
-        sampleSection.style.marginBottom = '10px';
-        
-        // Sample every few pixels to keep the visualization reasonable
-        const visualStep = Math.max(1, Math.floor(width / 200));
-        
-        for (let x = 0; x < width; x += visualStep) {
-            const pixelOffset = (middleY * width + x) * 4;
-            const r = data[pixelOffset];
-            const g = data[pixelOffset + 1];
-            const b = data[pixelOffset + 2];
-            const brightness = (r + g + b) / 3;
-            
-            const block = document.createElement('div');
-            block.style.width = '3px';
-            block.style.height = '100%';
-            block.style.backgroundColor = `rgb(${brightness}, ${brightness}, ${brightness})`;
-            sampleSection.appendChild(block);
+        // Add to camera container
+        const cameraContainer = document.querySelector('.camera-container');
+        if (cameraContainer) {
+            cameraContainer.appendChild(zoomControls);
         }
-        
-        visualizationEl.appendChild(sampleSection);
-        debugElement.appendChild(visualizationEl);
-        
-        // Count transitions across multiple lines to detect barcode
-        const transitionTableEl = document.createElement('div');
-        transitionTableEl.innerHTML = '<h5>Transition Analysis</h5>';
-        transitionTableEl.innerHTML += '<p>Counting transitions between dark/bright pixels across multiple lines:</p>';
-        
-        const rowsToSample = 7;
-        const rowSpacing = Math.floor(height / (rowsToSample + 1));
-        
-        const table = document.createElement('table');
-        table.style.borderCollapse = 'collapse';
-        table.style.width = '100%';
-        
-        // Table header
-        const thead = document.createElement('thead');
-        thead.innerHTML = `
-            <tr>
-                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Line #</th>
-                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Position (y)</th>
-                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Transitions</th>
-                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Result</th>
-            </tr>
-        `;
-        table.appendChild(thead);
-        
-        const tbody = document.createElement('tbody');
-        let totalTransitions = 0;
-        let detectedInAnyRow = false;
-        
-        for (let sampleIndex = 0; sampleIndex < rowsToSample; sampleIndex++) {
-            const y = (sampleIndex + 1) * rowSpacing;
-            
-            // Count transitions
-            let transitions = 0;
-            let lastBright = null;
-            const sampleStep = 2;
-            
-            for (let x = 0; x < width; x += sampleStep) {
-                const pixelOffset = (y * width + x) * 4;
-                const r = data[pixelOffset];
-                const g = data[pixelOffset + 1];
-                const b = data[pixelOffset + 2];
-                const brightness = (r + g + b) / 3;
-                
-                const isBright = brightness > 127;
-                
-                if (lastBright !== null && isBright !== lastBright) {
-                    transitions++;
-                }
-                
-                lastBright = isBright;
-            }
-            
-            totalTransitions += transitions;
-            const isBarcode = transitions > 30;
-            if (isBarcode) detectedInAnyRow = true;
-            
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td style="border: 1px solid #ddd; padding: 8px;">${sampleIndex + 1}</td>
-                <td style="border: 1px solid #ddd; padding: 8px;">${y}</td>
-                <td style="border: 1px solid #ddd; padding: 8px;">${transitions}</td>
-                <td style="border: 1px solid #ddd; padding: 8px; color: ${isBarcode ? 'green' : 'red'}">
-                    ${isBarcode ? '✓ DETECTED' : '✗ NOT DETECTED'}
-                </td>
-            `;
-            
-            tbody.appendChild(tr);
-        }
-        
-        table.appendChild(tbody);
-        transitionTableEl.appendChild(table);
-        
-        // Add summary
-        const avgTransitions = totalTransitions / rowsToSample;
-        const summaryEl = document.createElement('p');
-        summaryEl.innerHTML = `<strong>Average transitions per row:</strong> ${avgTransitions.toFixed(1)}<br>`;
-        summaryEl.innerHTML += `<strong>Final result:</strong> <span style="color: ${detectedInAnyRow || avgTransitions > 25 ? 'green' : 'red'}; font-weight: bold;">
-            ${detectedInAnyRow || avgTransitions > 25 ? 'BARCODE DETECTED' : 'NO BARCODE DETECTED'}
-        </span>`;
-        
-        transitionTableEl.appendChild(summaryEl);
-        debugElement.appendChild(transitionTableEl);
-        
-        // Return if we detected a barcode
-        return detectedInAnyRow || avgTransitions > 25;
     }
     
     // Function to restart video after taking a photo
@@ -2637,8 +2583,22 @@ function initBarcodeScanner() {
     function tryManualIsbnExtraction() {
         debug('Asking for manual ISBN input');
         
+        // Make sure canvas is visible with captured image
+        const canvas = document.getElementById('camera-canvas');
+        if (canvas) {
+            canvas.style.display = 'block';
+            canvas.style.width = '100%';
+            canvas.style.maxWidth = '400px';
+            canvas.style.height = 'auto';
+            canvas.style.margin = '10px auto';
+            canvas.style.border = '2px solid #ff6b92';
+            canvas.style.borderRadius = '8px';
+            canvas.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
+        }
+        
         // Display a helpful message in the debug area
         const debugInfo = document.getElementById('camera-debug-info') || createDebugInfoElement();
+        debugInfo.style.display = 'block';
         
         // Add a header to the debug area if it doesn't have one already
         if (!debugInfo.querySelector('h4')) {
