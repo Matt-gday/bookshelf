@@ -1782,6 +1782,38 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Initialize the barcode scanner
     // initBarcodeScanner(); // Removed barcode scanning functionality
+    
+    // Add handler for edit synopsis button
+    if (editSynopsisBtn) {
+        editSynopsisBtn.addEventListener('click', function() {
+            const synopsisDisplayArea = document.querySelector('.synopsis-display-area');
+            const synopsisEditInput = document.getElementById('synopsis-edit-input');
+            
+            if (synopsisDisplayArea && synopsisEditInput) {
+                synopsisDisplayArea.style.display = 'none';
+                synopsisEditInput.style.display = 'block';
+                synopsisEditInput.focus();
+            }
+        });
+    }
+    
+    // Fix navigation bar button display issue
+    const navButtons = document.querySelectorAll('.bottom-nav-button');
+    navButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            // Make sure all buttons display their icons and text correctly
+            navButtons.forEach(btn => {
+                // Ensure the icon and text are displayed
+                const icon = btn.querySelector('.material-symbols-outlined');
+                if (icon) {
+                    icon.style.display = '';
+                }
+                // Reset any incorrect sizing
+                btn.style.height = '';
+                btn.style.width = '';
+            });
+        });
+    });
 });
 
 // --- Re-add Handler for Removing Custom Cover ---
