@@ -997,7 +997,7 @@ button > span.material-symbols-outlined:only-child {
     background-color: rgba(255, 255, 255, 0.9);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
-    display: flex;
+    display: flex !important;
     justify-content: center;
     align-items: center;
     padding: 0.7rem 0.5rem;
@@ -1007,23 +1007,36 @@ button > span.material-symbols-outlined:only-child {
 }
 
 .bottom-nav-button {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
     padding: 0.5rem;
     color: var(--text-color-medium);
     background: none;
     border: none;
     font-size: 0.7rem;
     width: 70px; /* Fixed width instead of max-width */
+    height: auto !important; /* Prevent height manipulation */
     margin: 0 5px; /* Reduced margin for closer spacing */
     transition: color 0.2s ease;
+    pointer-events: auto !important;
+    opacity: 1 !important;
+    visibility: visible !important;
 }
 
 .bottom-nav-button .material-symbols-outlined {
-    font-size: 1.5rem;
-    margin-bottom: 0.3rem;
+    font-size: 1.5rem !important;
+    margin-bottom: 0.3rem !important;
+    display: block !important; /* Force icon to always be visible */
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+.bottom-nav-button span:not(.material-symbols-outlined) {
+    display: block !important; /* Force text to always be visible */
+    visibility: visible !important;
+    opacity: 1 !important;
 }
 
 .bottom-nav-button:hover {

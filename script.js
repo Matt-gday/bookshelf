@@ -172,6 +172,27 @@ function renderStars(rating, interactive = false) {
     return starsHtml;
 }
 
+// Dark Mode Functions
+function updateDarkModeUI() {
+    const isDarkMode = localStorage.getItem('darkMode') === 'true';
+    document.body.classList.toggle('dark-mode', isDarkMode);
+    
+    // Update dark mode button if it exists
+    const darkModeBtn = document.getElementById('dark-mode-btn');
+    if (darkModeBtn) {
+        darkModeBtn.classList.toggle('active', isDarkMode);
+        darkModeBtn.setAttribute('aria-pressed', isDarkMode.toString());
+    }
+    
+    console.log(`Dark mode is ${isDarkMode ? 'enabled' : 'disabled'}`);
+}
+
+function toggleDarkMode() {
+    const currentMode = localStorage.getItem('darkMode') === 'true';
+    localStorage.setItem('darkMode', (!currentMode).toString());
+    updateDarkModeUI();
+}
+
 function formatDisplayDate(dateString) {
     if (typeof dateString !== 'string' || !dateString) { return 'N/A'; }
     try {
@@ -1419,41 +1440,39 @@ function handleApplyFilters() {
 }
 
 function handleClearFilters() {
-    console.log("Clearing filters...");
-    // Reset global state
-    activeFilters = { status: [], reader: [], targetRating: 0 };
-    isFilterActive = false;
-
-    // Reset form elements
+    // Reset all filter checkboxes
     if (filterForm) {
-        filterForm.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
-        const anyRadio = filterForm.querySelector('input[name="filter-rating"][value="0"]');
-        if (anyRadio) anyRadio.checked = true;
+        // Reset checkboxes
+        const checkboxes = filterForm.querySelectorAll('input[type="checkbox"]');
+        checkboxes.forEach(checkbox => checkbox.checked = false);
+        
+        // Reset radio buttons to "Any" option
+        const anyRatingOption = filterForm.querySelector('#filter-rating-any');
+        if (anyRatingOption) anyRatingOption.checked = true;
     }
-
-    // Reset sort to default
-    currentSort = { field: 'dateAdded', direction: 'desc' };
     
-    // Update filter sort select
-    const filterSortSelect = document.getElementById('filter-sort-select');
-    if (filterSortSelect) {
-        filterSortSelect.value = 'dateAdded_desc';
-    }
-
-    renderBooks(); // Re-render without filters
+    // Reset filter state
+    activeFilters = {
+        status: [],
+        reader: [],
+        targetRating: 0
+    };
+    isFilterActive = false;
+    
+    // Rerender books with cleared filters
+    renderBooks();
+    
+    // Hide filter modal
     hideFilterModal();
 }
 
 // --- Sort Handler ---
 function handleSortChange(event) {
-    const selectedValue = event.target.value;
-    const [field, direction] = selectedValue.split('_');
-
-    if (field && direction) {
-        currentSort = { field, direction };
-        console.log(`Sort changed to: ${field} ${direction}`);
-        renderBooks(); // Re-render with new sort order
-    }
+    const selectedOption = event.target.value;
+    const [field, direction] = selectedOption.split('_');
+    console.log(`Sorting by ${field} in ${direction} order`);
+    currentSort = { field, direction };
+    renderBooks();
 }
 
 // --- View Selection ---
@@ -1474,6 +1493,232 @@ function setView(viewType) {
     renderBooks();
 }
 
+// Settings modal functions
+function showSettingsModal() {
+    const settingsModal = document.getElementById('settings-modal');
+    if (settingsModal) {
+        settingsModal.classList.add('visible');
+    }
+}
+
+function hideSettingsModal() {
+    const settingsModal = document.getElementById('settings-modal');
+    if (settingsModal) {
+        settingsModal.classList.remove('visible');
+    }
+}
+
+// Export/Import functions
+function exportBooksToCSV() {
+    if (allBooks.length === 0) {
+        alert('No books to export.');
+        return;
+    }
+    
+    // CSV Header
+    const csvHeader = [
+        'ISBN', 'Title', 'Authors', 'Status', 'Reader', 'Rating', 
+        'Date Added', 'Date Finished', 'Series', 'Series Number', 
+        'Page Count', 'Publisher', 'Publication Year', 'Tags', 'Review'
+    ].join(',');
+    
+    // Convert each book to CSV row
+    const csvRows = allBooks.map(book => {
+        // Escape fields that may contain commas
+        const escapeField = (field) => {
+            if (field === null || field === undefined) return '';
+            const str = String(field);
+            return str.includes(',') ? `"${str}"` : str;
+        };
+        
+        const authors = escapeField(book.authors.join('; '));
+        const tags = escapeField(book.customTags.join('; '));
+        const review = escapeField(book.review);
+        const title = escapeField(book.title);
+        
+        return [
+            book.isbn,
+            title,
+            authors,
+            book.status,
+            book.reader,
+            book.personalRating || '',
+            formatDisplayDate(book.dateAdded),
+            book.dateFinished ? formatDisplayDate(book.dateFinished) : '',
+            escapeField(book.seriesTitle),
+            book.seriesNumber || '',
+            book.effectivePageCount || '',
+            escapeField(book.publisher),
+            book.publicationYear,
+            tags,
+            review
+        ].join(',');
+    });
+    
+    // Create CSV content
+    const csvContent = [csvHeader, ...csvRows].join('\n');
+    
+    // Create and trigger download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `bookshelf_export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+// Delete book function
+function handleDeleteBook(bookId) {
+    const bookToDelete = allBooks.find(book => book.id === bookId);
+    if (!bookToDelete) return;
+    
+    const confirmMessage = `Are you sure you want to delete "${bookToDelete.title}"? This cannot be undone.`;
+    if (confirm(confirmMessage)) {
+        // Remove the book from the array
+        allBooks = allBooks.filter(book => book.id !== bookId);
+        
+        // Update storage
+        saveBooksToStorage(allBooks);
+        
+        // Close the detail modal
+        hideBookDetailModal();
+        
+        // Re-render the books
+        renderBooks();
+        
+        console.log(`Book deleted: ${bookToDelete.title}`);
+    }
+}
+
+function importBooksFromCSV(file) {
+    if (!file) {
+        alert('No file selected.');
+        return;
+    }
+    
+    const reader = new FileReader();
+    reader.onload = function(event) {
+        try {
+            const csvData = event.target.result;
+            const lines = csvData.split('\n');
+            const headers = lines[0].split(',');
+            
+            // Expected headers
+            const requiredHeaders = ['ISBN', 'Title', 'Authors', 'Status'];
+            
+            // Validate if the CSV has the minimum required headers
+            const missingHeaders = requiredHeaders.filter(h => !headers.includes(h));
+            if (missingHeaders.length > 0) {
+                alert(`CSV is missing required headers: ${missingHeaders.join(', ')}`);
+                return;
+            }
+            
+            // Parse CSV rows into books
+            const importedBooks = [];
+            for (let i = 1; i < lines.length; i++) {
+                if (!lines[i].trim()) continue; // Skip empty lines
+                
+                const values = parseCSVLine(lines[i]);
+                if (values.length !== headers.length) {
+                    console.error(`Line ${i} has ${values.length} values, expected ${headers.length}`);
+                    continue;
+                }
+                
+                // Create a map of field values
+                const bookData = {};
+                headers.forEach((header, index) => {
+                    bookData[header.trim()] = values[index];
+                });
+                
+                // Convert authors from string to array
+                const authors = bookData['Authors'] ? bookData['Authors'].split(';').map(a => a.trim()) : [];
+                
+                // Convert tags from string to array
+                const tags = bookData['Tags'] ? bookData['Tags'].split(';').map(t => t.trim()) : [];
+                
+                // Create a new book object
+                const newBook = new BookV2(
+                    bookData['ISBN'] || '',
+                    bookData['Title'] || '',
+                    authors,
+                    '', // No cover image from CSV
+                    bookData['Synopsis'] || '',
+                    bookData['Publisher'] || '',
+                    bookData['Publication Year'] || '',
+                    bookData['Page Count'] ? parseInt(bookData['Page Count'], 10) : null,
+                    [], // No genres from CSV
+                    bookData['Series'] || '',
+                    bookData['Series Number'] || '',
+                    bookData['Reader'] || '',
+                    bookData['Status'] || '',
+                    bookData['Rating'] ? parseFloat(bookData['Rating']) : null,
+                    new Date().toISOString(), // Current date as import date
+                    bookData['Date Finished'] || null,
+                    tags,
+                    '', // No user series title
+                    '', // No user series number
+                    null, // No user page count
+                    null, // No user cover image
+                    bookData['Review'] || ''
+                );
+                
+                importedBooks.push(newBook);
+            }
+            
+            if (importedBooks.length === 0) {
+                alert('No valid books found in the CSV file.');
+                return;
+            }
+            
+            // Confirm import
+            if (confirm(`Import ${importedBooks.length} books?`)) {
+                // Add the imported books to the existing books
+                allBooks = [...allBooks, ...importedBooks];
+                saveBooksToStorage(allBooks);
+                alert(`Successfully imported ${importedBooks.length} books.`);
+                renderBooks();
+            }
+            
+        } catch (error) {
+            console.error('Error importing CSV:', error);
+            alert('Error importing CSV file. Please check the file format.');
+        }
+    };
+    
+    reader.onerror = function() {
+        alert('Error reading the file.');
+    };
+    
+    reader.readAsText(file);
+}
+
+// Helper function to parse CSV line correctly handling quoted fields
+function parseCSVLine(line) {
+    const result = [];
+    let currentValue = '';
+    let inQuotes = false;
+    
+    for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        
+        if (char === '"') {
+            inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+            result.push(currentValue);
+            currentValue = '';
+        } else {
+            currentValue += char;
+        }
+    }
+    
+    // Add the last value
+    result.push(currentValue);
+    return result;
+}
+
 // --- Document Ready --- //
 document.addEventListener('DOMContentLoaded', function() {
     console.log("DOM fully loaded, initializing app...");
@@ -1483,7 +1728,8 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // --- UI Elements (Assignment) ---
     bookDisplayArea = document.getElementById('book-display-area');
-    // Remove viewToggleButton reference as we now have separate view buttons
+    
+    // Initialize all UI element references
     isbnInputContainer = document.getElementById('isbn-input-container');
     isbnManualInput = document.getElementById('isbn-manual-input');
     isbnLookupButton = document.getElementById('isbn-lookup-btn');
@@ -1555,7 +1801,7 @@ document.addEventListener('DOMContentLoaded', function() {
     removeCustomCoverBtn = document.getElementById('remove-custom-cover-btn');
     addManuallyBtn = document.getElementById('add-manually-btn');
     
-    // --- Bottom Navigation Bar Elements ---
+    // Bottom Navigation Bar Elements
     const homeNavBtn = document.getElementById('home-nav-btn');
     const addNavBtn = document.getElementById('add-nav-btn');
     const searchNavBtn = document.getElementById('search-nav-btn');
@@ -1591,6 +1837,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Settings Button and Modal
     if (settingsBtn) settingsBtn.addEventListener('click', showSettingsModal);
     if (settingsCloseBtn) settingsCloseBtn.addEventListener('click', hideSettingsModal);
+    
+    // Export/Import Functionality
     if (exportBtn) exportBtn.addEventListener('click', exportBooksToCSV);
     if (importBtn) {
         importBtn.addEventListener('click', () => {
@@ -1618,13 +1866,6 @@ document.addEventListener('DOMContentLoaded', function() {
     if (filterClearBtn) filterClearBtn.addEventListener('click', handleClearFilters);
     if (filterCancelBtn) filterCancelBtn.addEventListener('click', hideFilterModal);
     
-    // Only use filter-sort-select for sorting
-    const filterSortSelect = document.getElementById('filter-sort-select');
-    sortSelect = filterSortSelect;
-    if (filterSortSelect) {
-        filterSortSelect.value = `${currentSort.field}_${currentSort.direction}`;
-    }
-    
     // ISBN input modal
     if (isbnLookupButton) isbnLookupButton.addEventListener('click', handleIsbnLookup);
     if (cancelIsbnInputButton) cancelIsbnInputButton.addEventListener('click', hideIsbnInputModal);
@@ -1649,18 +1890,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
         }
-        
-        // Initialize file name display updater
-        updateFileNameDisplay();
-    }
-    
-    if (saveBookBtn) {
-        saveBookBtn.addEventListener('click', (event) => {
-            if (saveBookBtn.classList.contains('btn-check-fields')) {
-                validateFormAndToggleButtonState(true);
-                event.preventDefault();
-            }
-        });
     }
     
     if (cancelAddBookButton) cancelAddBookButton.addEventListener('click', hideAddBookModal);
@@ -1688,43 +1917,6 @@ document.addEventListener('DOMContentLoaded', function() {
     if (ratingSaveBtn) ratingSaveBtn.addEventListener('click', handleRatingSave);
     if (editReviewBtn) editReviewBtn.addEventListener('click', handleEditReviewClick);
     if (reviewInput) reviewInput.addEventListener('input', updateRatingModalButtons);
-    if (interactiveStarsContainer) {
-        interactiveStarsContainer.addEventListener('mousedown', handleStarInteractionStart);
-        interactiveStarsContainer.addEventListener('mousemove', handleStarInteractionMove);
-        interactiveStarsContainer.addEventListener('mouseup', handleStarInteractionEnd);
-        interactiveStarsContainer.addEventListener('mouseleave', handleStarInteractionEnd);
-        interactiveStarsContainer.addEventListener('touchstart', handleStarInteractionStart, { passive: true });
-        interactiveStarsContainer.addEventListener('touchmove', handleStarInteractionMove, { passive: true });
-        interactiveStarsContainer.addEventListener('touchend', handleStarInteractionEnd);
-    }
-    
-    // User cover upload
-    const userCoverInput = addBookForm?.querySelector('#userCoverImage');
-    if (userCoverInput && formCoverPreview) {
-        userCoverInput.addEventListener('change', (event) => {
-            const file = event.target.files ? event.target.files[0] : null;
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = (loadEvent) => {
-                    if (loadEvent.target && typeof loadEvent.target.result === 'string') {
-                        selectedCoverImageDataUrl = loadEvent.target.result;
-                        formCoverPreview.src = selectedCoverImageDataUrl;
-                        formCoverPreview.style.display = 'block';
-                        if (removeCustomCoverBtn) {
-                            customCoverRemoved = false;
-                            removeCustomCoverBtn.style.display = 'inline-block';
-                            removeCustomCoverBtn.disabled = false;
-                        }
-                    }
-                };
-                reader.readAsDataURL(file);
-            }
-        });
-    }
-
-    if (removeCustomCoverBtn) {
-        removeCustomCoverBtn.addEventListener('click', handleRemoveCustomCover);
-    }
     
     // Function to set active bottom nav button
     function setActiveNavButton(buttonId) {
@@ -1738,1198 +1930,145 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Bottom Nav Event Listeners
     if (homeNavBtn) {
-        homeNavBtn.addEventListener('click', function() {
+        homeNavBtn.onclick = function() {
+            console.log("Home button clicked");
             setActiveNavButton('home-nav-btn');
             clearSearch();
             isWishlistViewActive = false;
             renderBooks();
-        });
+            return false; // Prevent default
+        };
     }
     
     if (addNavBtn) {
-        addNavBtn.addEventListener('click', function() {
+        addNavBtn.onclick = function() {
+            console.log("Add button clicked");
             setActiveNavButton('add-nav-btn');
             showIsbnInputModal();
-        });
+            return false; // Prevent default
+        };
     }
     
     if (searchNavBtn) {
-        searchNavBtn.addEventListener('click', function() {
+        searchNavBtn.onclick = function() {
+            console.log("Search button clicked");
             setActiveNavButton('search-nav-btn');
             showSearchModal();
-        });
+            return false; // Prevent default
+        };
     }
     
     if (wishlistNavBtn) {
-        wishlistNavBtn.addEventListener('click', function() {
+        wishlistNavBtn.onclick = function() {
+            console.log("Wishlist button clicked");
             setActiveNavButton('wishlist-nav-btn');
             isWishlistViewActive = true;
             renderBooks();
-        });
+            return false; // Prevent default
+        };
     }
     
     if (filterNavBtn) {
-        filterNavBtn.addEventListener('click', function() {
+        filterNavBtn.onclick = function() {
+            console.log("Filter button clicked");
             setActiveNavButton('filter-nav-btn');
             showFilterModal();
+            return false; // Prevent default
+        };
+    }
+
+    // Function to fix navigation bar icon display issues
+    function fixNavigationButtons() {
+        const navButtons = document.querySelectorAll('.bottom-nav-button');
+        navButtons.forEach(btn => {
+            const icon = btn.querySelector('.material-symbols-outlined');
+            const text = btn.querySelector('span:not(.material-symbols-outlined)');
+            
+            // Reset any inline styles on the button itself
+            btn.style.height = '';
+            btn.style.display = 'flex';
+            btn.style.flexDirection = 'column';
+            btn.style.alignItems = 'center';
+            btn.style.justifyContent = 'center';
+            btn.style.pointerEvents = 'auto';
+            btn.style.cursor = 'pointer';
+            
+            if (icon) {
+                // Force icon visibility with !important (via JS)
+                icon.style.cssText = 'display: block !important; visibility: visible !important; opacity: 1 !important; font-size: 1.5rem !important; margin-bottom: 0.3rem !important;';
+                icon.classList.remove('hidden');
+                
+                // Ensure parent elements don't hide the icon
+                let parent = icon.parentElement;
+                while (parent && parent !== document.body) {
+                    if (getComputedStyle(parent).display === 'none') {
+                        parent.style.display = 'block';
+                    }
+                    parent = parent.parentElement;
+                }
+            }
+            
+            if (text) {
+                // Force text visibility with !important (via JS)
+                text.style.cssText = 'display: block !important; visibility: visible !important; opacity: 1 !important; font-size: 0.7rem !important;';
+                text.classList.remove('hidden');
+            }
+            
+            // Remove console logging to prevent flooding
+            // console.log(`Fixed navigation button: ${btn.id}, Icon: ${icon ? 'present' : 'missing'}, Text: ${text ? 'present' : 'missing'}`);
         });
     }
+    
+    // Fix navigation buttons initially
+    fixNavigationButtons();
+    
+    // Run fix when nav buttons are clicked
+    // Using the new onclick handlers instead of addEventListener
+    if (homeNavBtn) {
+        const oldHomeClick = homeNavBtn.onclick;
+        homeNavBtn.onclick = function() {
+            fixNavigationButtons();
+            return oldHomeClick ? oldHomeClick.apply(this, arguments) : true;
+        };
+    }
+    
+    if (addNavBtn) {
+        const oldAddClick = addNavBtn.onclick;
+        addNavBtn.onclick = function() {
+            fixNavigationButtons();
+            return oldAddClick ? oldAddClick.apply(this, arguments) : true;
+        };
+    }
+    
+    if (wishlistNavBtn) {
+        const oldWishlistClick = wishlistNavBtn.onclick;
+        wishlistNavBtn.onclick = function() {
+            fixNavigationButtons();
+            return oldWishlistClick ? oldWishlistClick.apply(this, arguments) : true;
+        };
+    }
+    
+    if (filterNavBtn) {
+        const oldFilterClick = filterNavBtn.onclick;
+        filterNavBtn.onclick = function() {
+            fixNavigationButtons();
+            return oldFilterClick ? oldFilterClick.apply(this, arguments) : true;
+        };
+    }
+    
+    if (searchNavBtn) {
+        const oldSearchClick = searchNavBtn.onclick;
+        searchNavBtn.onclick = function() {
+            fixNavigationButtons();
+            return oldSearchClick ? oldSearchClick.apply(this, arguments) : true;
+        };
+    }
+    
+    // Run fix periodically with reduced frequency to avoid constant console output
+    setInterval(fixNavigationButtons, 2000);
 
     // --- Book Data Loading & Initial Render ---
     allBooks = loadBooksFromStorage();
     populateSeriesDatalist();
     renderBooks();
-
-    // Initialize the barcode scanner
-    // initBarcodeScanner(); // Removed barcode scanning functionality
-    
-    // Add handler for edit synopsis button
-    if (editSynopsisBtn) {
-        editSynopsisBtn.addEventListener('click', function() {
-            const synopsisDisplayArea = document.querySelector('.synopsis-display-area');
-            const synopsisEditInput = document.getElementById('synopsis-edit-input');
-            
-            if (synopsisDisplayArea && synopsisEditInput) {
-                synopsisDisplayArea.style.display = 'none';
-                synopsisEditInput.style.display = 'block';
-                synopsisEditInput.focus();
-            }
-        });
-    }
-    
-    // Fix navigation bar button display issue
-    const navButtons = document.querySelectorAll('.bottom-nav-button');
-    navButtons.forEach(button => {
-        button.addEventListener('click', function() {
-            // Make sure all buttons display their icons and text correctly
-            navButtons.forEach(btn => {
-                // Ensure the icon and text are displayed
-                const icon = btn.querySelector('.material-symbols-outlined');
-                if (icon) {
-                    icon.style.display = '';
-                }
-                // Reset any incorrect sizing
-                btn.style.height = '';
-                btn.style.width = '';
-            });
-        });
-    });
 });
-
-// --- Re-add Handler for Removing Custom Cover ---
-function handleRemoveCustomCover() {
-    console.log("Remove Custom Cover button clicked."); // Log click
-    customCoverRemoved = true;
-    selectedCoverImageDataUrl = null;
-
-    const userCoverInput = addBookForm?.querySelector('#userCoverImage');
-    if (userCoverInput) {
-        userCoverInput.value = null; // Clear the file input visually
-        console.log("Cleared file input value.");
-    }
-
-    // Determine the fallback image
-    let fallbackCoverUrl = null;
-    const originalBookData = currentlyEditingBookId ? allBooks.find(b => b.id === currentlyEditingBookId) : null;
-    if (originalBookData?.coverImageUrl) {
-        fallbackCoverUrl = originalBookData.coverImageUrl;
-        console.log("Found original API cover URL as fallback.");
-    } else if (currentlyFetchedApiData?.coverImageUrl) {
-        fallbackCoverUrl = currentlyFetchedApiData.coverImageUrl;
-        console.log("Found fetched API cover URL as fallback.");
-    } else {
-        console.log("No fallback cover URL found.");
-    }
-
-    // Update the preview
-    if (formCoverPreview) {
-        if (fallbackCoverUrl) {
-            formCoverPreview.src = fallbackCoverUrl;
-            formCoverPreview.onerror = () => { formCoverPreview.src = 'placeholder-cover.png'; };
-            formCoverPreview.style.display = 'block';
-            console.log(`Set preview to fallback: ${fallbackCoverUrl}`);
-        } else {
-            formCoverPreview.src = '#';
-            formCoverPreview.style.display = 'none';
-            console.log("Hid preview (no fallback).");
-        }
-    }
-
-    // Hide/disable the remove button itself
-    if (removeCustomCoverBtn) {
-        removeCustomCoverBtn.style.display = 'none';
-        removeCustomCoverBtn.disabled = true;
-        console.log("Hid and disabled the remove button.");
-    }
-}
-
-// --- Placeholder Delete Function ---
-function handleDeleteBook(bookId) {
-    const bookIndex = allBooks.findIndex(b => b.id === bookId);
-    if (bookIndex === -1) {
-        console.error(`[handleDeleteBook] Error: Book with ID ${bookId} not found.`);
-        alert("Error: Could not find the book to delete.");
-        return;
-    }
-
-    const bookTitle = allBooks[bookIndex].title;
-
-    // 1. Confirm Deletion
-    if (confirm(`Are you sure you want to permanently delete "${bookTitle}"? This cannot be undone.`)) {
-        console.log(`[handleDeleteBook] User confirmed deletion for book ID: ${bookId} (${bookTitle})`);
-
-        // 2. Remove the book from the array
-        allBooks.splice(bookIndex, 1);
-        console.log(`[handleDeleteBook] Book removed from allBooks array.`);
-
-        // 3. Save the updated array to storage
-        saveBooksToStorage(allBooks);
-        console.log(`[handleDeleteBook] Updated book list saved to storage.`);
-
-        // 4. Update UI
-        hideBookDetailModal(); // Close the detail modal
-        renderBooks(); // Re-render the book list
-        console.log(`[handleDeleteBook] Modal closed and book list re-rendered.`);
-
-        alert(`"${bookTitle}" has been deleted.`); // Optional confirmation message
-    } else {
-        console.log(`[handleDeleteBook] User cancelled deletion for book ID: ${bookId}`);
-    }
-}
-
-// Dark mode functionality
-let darkModeEnabled = localStorage.getItem('darkMode') === 'true';
-
-function toggleDarkMode() {
-    darkModeEnabled = !darkModeEnabled;
-    updateDarkModeUI();
-    localStorage.setItem('darkMode', darkModeEnabled);
-}
-
-function updateDarkModeUI() {
-    if (darkModeEnabled) {
-        document.body.classList.add('dark-mode');
-        document.getElementById('dark-mode-btn')?.classList.add('active');
-    } else {
-        document.body.classList.remove('dark-mode');
-        document.getElementById('dark-mode-btn')?.classList.remove('active');
-    }
-}
-
-// Export books data to CSV
-function exportBooksToCSV() {
-    const books = loadBooksFromStorage();
-    if (!books || books.length === 0) {
-        alert('No books to export.');
-        return;
-    }
-
-    // Define CSV headers (all possible fields)
-    const headers = [
-        'id', 'isbn', 'title', 'authors', 'coverImageUrl', 'synopsis',
-        'publisher', 'publicationYear', 'pageCount', 'apiGenres',
-        'apiSeriesTitle', 'apiSeriesNumber', 'reader', 'status',
-        'personalRating', 'dateAdded', 'dateFinished', 'customTags',
-        'userSeriesTitle', 'userSeriesNumber', 'userPageCount', 'userCoverImage',
-        'review'
-    ];
-
-    // Convert books to CSV format
-    let csvContent = headers.join(',') + '\n';
-    
-    books.forEach(book => {
-        const row = headers.map(header => {
-            let value = book[header];
-            
-            // Handle arrays and objects
-            if (Array.isArray(value)) {
-                value = JSON.stringify(value).replace(/"/g, '""');
-            } else if (value && typeof value === 'object') {
-                value = JSON.stringify(value).replace(/"/g, '""');
-            }
-            
-            // Convert null/undefined to empty string
-            if (value === null || value === undefined) {
-                value = '';
-            }
-            
-            // Escape commas and quotes
-            value = String(value).replace(/"/g, '""');
-            if (value.includes(',') || value.includes('"') || value.includes('\n')) {
-                value = `"${value}"`;
-            }
-            
-            return value;
-        });
-        
-        csvContent += row.join(',') + '\n';
-    });
-
-    // Create download link
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `books_export_${new Date().toISOString().slice(0, 10)}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-}
-
-// Settings Modal Functions
-function showSettingsModal() {
-    const settingsModal = document.getElementById('settings-modal');
-    if (settingsModal) {
-        settingsModal.classList.add('visible');
-    }
-}
-
-function hideSettingsModal() {
-    const settingsModal = document.getElementById('settings-modal');
-    if (settingsModal) {
-        settingsModal.classList.remove('visible');
-    }
-}
-
-// Import CSV data
-function importBooksFromCSV(file) {
-    if (!file) {
-        alert('No file selected for import.');
-        return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        try {
-            const csvData = e.target.result;
-            const lines = csvData.split('\n');
-            
-            // Get headers from first line
-            const headers = lines[0].split(',').map(header => 
-                header.trim().replace(/^"(.+)"$/, '$1') // Remove quotes if present
-            );
-            
-            // Process data rows
-            const books = [];
-            for (let i = 1; i < lines.length; i++) {
-                if (!lines[i].trim()) continue; // Skip empty lines
-                
-                // Split the line by commas not inside quotes
-                let row = lines[i];
-                let values = [];
-                let inQuotes = false;
-                let currentValue = '';
-                
-                for (let j = 0; j < row.length; j++) {
-                    const char = row[j];
-                    if (char === '"') {
-                        if (j > 0 && row[j-1] === '\\') {
-                            // Escaped quote
-                            currentValue = currentValue.slice(0, -1) + '"';
-                        } else {
-                            // Toggle quote state
-                            inQuotes = !inQuotes;
-                        }
-                    } else if (char === ',' && !inQuotes) {
-                        // End of value
-                        values.push(currentValue.trim().replace(/^"(.+)"$/, '$1'));
-                        currentValue = '';
-                    } else {
-                        // Part of value
-                        currentValue += char;
-                    }
-                }
-                values.push(currentValue.trim().replace(/^"(.+)"$/, '$1')); // Add the last value
-                
-                // Create book object from row values
-                const book = {};
-                headers.forEach((header, index) => {
-                    let value = values[index] || '';
-                    
-                    // Convert string to array if needed
-                    if (value.startsWith('[') && value.endsWith(']')) {
-                        try {
-                            value = JSON.parse(value);
-                        } catch (e) {
-                            console.error(`Error parsing array for ${header}:`, e);
-                        }
-                    }
-                    
-                    // Convert empty strings to null for specific fields
-                    if (value === '' && ['personalRating', 'userPageCount', 'pageCount'].includes(header)) {
-                        value = null;
-                    }
-                    
-                    book[header] = value;
-                });
-                
-                books.push(book);
-            }
-            
-            // Confirm before replacing existing data
-            if (books.length > 0) {
-                if (confirm(`Import ${books.length} books? This will replace your current library.`)) {
-                    saveBooksToStorage(books);
-                    alert(`Successfully imported ${books.length} books. Refreshing page...`);
-                    location.reload(); // Refresh to show imported data
-                }
-            } else {
-                alert('No valid book data found in the imported file.');
-            }
-            
-        } catch (error) {
-            console.error('Error importing CSV:', error);
-            alert('Error importing CSV file. Please check the file format and try again.');
-        }
-    };
-    
-    reader.onerror = function() {
-        alert('Error reading the file. Please try again.');
-    };
-    
-    reader.readAsText(file);
-}
-
-// Initialize camera and barcode scanner
-let cameraInitialized = false;
-let videoActive = false;
-
-function initBarcodeScanner() {
-    const videoElem = document.getElementById('camera-preview');
-    const canvasElem = document.getElementById('camera-canvas');
-    const cameraContainer = document.querySelector('.camera-container');
-    const cameraStatus = document.querySelector('.camera-status');
-    const cameraPlaceholder = document.getElementById('camera-placeholder');
-    
-    // Define debug function to prevent "can't find variable debug" error
-    function debug(message) {
-        console.log("[Camera Debug] " + message);
-        // You can also update a UI element if needed
-    }
-    
-    // Add click event listener to the camera placeholder
-    if (cameraPlaceholder) {
-        cameraPlaceholder.addEventListener('click', function() {
-            cameraPlaceholder.style.display = 'none';
-            startCamera();
-        });
-    }
-    
-    let videoStream = null;
-
-    // Use this to hold our scan target guide
-    let scanTargetGuide = null;
-    
-    // Function to start the camera
-    async function startCamera() {
-        try {
-            if (videoActive) return;
-            
-            cameraContainer.classList.add('active');
-            cameraStatus.textContent = 'Starting camera...';
-            
-            // Make video visible
-            videoElem.removeAttribute('hidden');
-            videoElem.style.display = 'block';
-            videoElem.style.width = '100%';
-            videoElem.style.height = '100%';
-            videoElem.style.objectFit = 'cover';
-            
-            // Hide the placeholder
-            if (cameraPlaceholder) {
-                cameraPlaceholder.style.display = 'none';
-            }
-            
-            // Make sure canvas is hidden at start
-            const canvas = document.getElementById('camera-canvas');
-            if (canvas) {
-                canvas.style.display = 'none';
-            }
-            
-            // Create our scan target guide if it doesn't exist
-            if (!scanTargetGuide) {
-                scanTargetGuide = document.createElement('div');
-                scanTargetGuide.id = 'scan-target-guide';
-                scanTargetGuide.style.position = 'absolute';
-                scanTargetGuide.style.top = '50%';
-                scanTargetGuide.style.left = '50%';
-                scanTargetGuide.style.width = '70%';
-                scanTargetGuide.style.height = '25%';
-                scanTargetGuide.style.transform = 'translate(-50%, -50%)';
-                scanTargetGuide.style.pointerEvents = 'none';
-                scanTargetGuide.style.zIndex = '10';
-                scanTargetGuide.style.borderRadius = '8px';
-                scanTargetGuide.style.border = '3px dashed #ff6b92';
-                scanTargetGuide.style.boxShadow = '0 0 0 2000px rgba(0, 0, 0, 0.3)';
-                
-                // Add instruction text inside the guide
-                const instructionText = document.createElement('div');
-                instructionText.textContent = 'Place barcode here';
-                instructionText.style.position = 'absolute';
-                instructionText.style.bottom = '-40px';
-                instructionText.style.left = '0';
-                instructionText.style.right = '0';
-                instructionText.style.textAlign = 'center';
-                instructionText.style.color = 'white';
-                instructionText.style.fontWeight = 'bold';
-                instructionText.style.textShadow = '0 0 4px black';
-                scanTargetGuide.appendChild(instructionText);
-                
-                cameraContainer.appendChild(scanTargetGuide);
-            }
-            
-            // Create and add capture button if it doesn't exist
-            let captureBtn = cameraContainer.querySelector('.capture-photo-btn');
-            if (!captureBtn) {
-                captureBtn = document.createElement('button');
-                captureBtn.className = 'capture-photo-btn';
-                captureBtn.setAttribute('aria-label', 'Take Photo');
-                captureBtn.innerHTML = '<span class="material-symbols-outlined">photo_camera</span>';
-                cameraContainer.appendChild(captureBtn);
-                
-                // Add click event listener for capture button
-                captureBtn.addEventListener('click', captureAndScanImage);
-            } else {
-                captureBtn.style.display = 'flex';
-            }
-            
-            // Create a manual ISBN button
-            let manualBtn = cameraContainer.querySelector('.manual-isbn-btn');
-            if (!manualBtn) {
-                manualBtn = document.createElement('button');
-                manualBtn.className = 'manual-isbn-btn';
-                manualBtn.textContent = 'Enter ISBN Manually';
-                cameraContainer.appendChild(manualBtn);
-                
-                manualBtn.addEventListener('click', () => {
-                    // Focus on the ISBN input field
-                    const isbnInput = document.getElementById('isbn-input');
-                    if (isbnInput) {
-                        stopCamera();
-                        isbnInput.focus();
-                    }
-                });
-            } else {
-                manualBtn.style.display = 'block';
-            }
-            
-            // Request camera access with a preference for the back camera
-            const constraints = {
-                video: {
-                    facingMode: "environment",
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 },
-                    zoom: true // Request zoom capability if available
-                },
-                audio: false
-            };
-            
-            videoStream = await navigator.mediaDevices.getUserMedia(constraints);
-            videoElem.srcObject = videoStream;
-            
-            // Wait for video to be ready
-            await new Promise(resolve => {
-                videoElem.addEventListener('loadedmetadata', resolve, { once: true });
-                videoElem.play();
-            });
-            
-            videoActive = true;
-            cameraStatus.textContent = 'Position barcode in the frame and tap the button';
-            debug('Camera started');
-            
-            // Add zoom controls
-            addZoomControls();
-            
-        } catch (error) {
-            console.error("Error starting camera:", error);
-            cameraStatus.textContent = 'Could not access camera. Error: ' + error.message;
-            debug('Camera error: ' + error.message);
-        }
-    }
-    
-    // Function to stop the camera
-    function stopCamera() {
-        if (!videoActive) return;
-        
-        // Stop video stream
-        if (videoStream) {
-            videoStream.getTracks().forEach(track => track.stop());
-            videoStream = null;
-        }
-        
-        // Hide video element and container
-        videoElem.srcObject = null;
-        cameraContainer.classList.remove('active');
-        
-        // Hide buttons
-        const captureBtn = cameraContainer.querySelector('.capture-photo-btn');
-        if (captureBtn) captureBtn.style.display = 'none';
-        
-        const manualBtn = cameraContainer.querySelector('.manual-isbn-btn');
-        if (manualBtn) manualBtn.style.display = 'none';
-        
-        videoActive = false;
-        debug('Camera stopped');
-    }
-    
-    // Function to capture and scan the current frame
-    function captureAndScanImage() {
-        if (!videoElem || videoElem.paused || videoElem.ended) {
-            console.error('Video not available for capture');
-            return;
-        }
-        
-        const canvas = document.getElementById('camera-canvas');
-        const context = canvas.getContext('2d');
-        
-        // Set canvas dimensions to match video
-        canvas.width = videoElem.videoWidth;
-        canvas.height = videoElem.videoHeight;
-        
-        // Draw video frame to canvas
-        context.drawImage(videoElem, 0, 0, canvas.width, canvas.height);
-        
-        // Make canvas visible and larger
-        canvas.style.display = 'block';
-        canvas.style.width = '100%';
-        canvas.style.maxWidth = '400px';
-        canvas.style.height = 'auto';
-        canvas.style.margin = '0 auto';
-        canvas.style.border = '1px solid #ddd';
-        
-        // Get the debug info element or create it if needed
-        const debugInfo = document.getElementById('camera-debug-info') || createDebugInfoElement();
-        debugInfo.style.display = 'block'; // Make sure debug info is visible
-        
-        // Stop the video to show the captured image
-        stopVideo();
-        
-        // Get image data for processing
-        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-        
-        // Always show raw scan debug
-        const barcodeDetected = showRawScanDebug(imageData);
-        
-        console.log('Captured image, scanning for barcode...');
-        
-        try {
-            // Try to decode with ZXing
-            if (window.reader) {
-                const result = window.reader.decode(imageData.data, imageData.width, imageData.height);
-                console.log('ZXing decode result:', result);
-                
-                if (result && result.text) {
-                    // Update debug info with successful decode
-                    if (debugInfo) {
-                        const decodeResult = document.createElement('p');
-                        decodeResult.innerHTML = `<strong>ZXing decode result:</strong> ${result.text}`;
-                        decodeResult.style.color = 'green';
-                        debugInfo.appendChild(decodeResult);
-                    }
-                    
-                    processCodeData(result.text);
-                    return;
-                }
-            }
-        } catch (error) {
-            console.error('ZXing decode error:', error);
-            
-            // Update debug info with error
-            if (debugInfo) {
-                const errorInfo = document.createElement('p');
-                errorInfo.innerHTML = `<strong>ZXing error:</strong> ${error.message}`;
-                errorInfo.style.color = 'red';
-                debugInfo.appendChild(errorInfo);
-            }
-            
-            if (error instanceof TypeError) {
-                // Handle specific error type
-                console.log('TypeError in ZXing decode, falling back to manual detection');
-            }
-        }
-        
-        // If barcode detected but ZXing failed, try manual extraction
-        if (barcodeDetected) {
-            tryManualIsbnExtraction();
-        } else {
-            console.log('No barcode detected in image');
-            
-            // Update the debug info with a message
-            if (debugInfo) {
-                const noBarcode = document.createElement('p');
-                noBarcode.textContent = 'No barcode detected. Try taking another picture with better lighting and alignment.';
-                noBarcode.style.fontWeight = 'bold';
-                debugInfo.appendChild(noBarcode);
-            }
-            
-            // Add a retry button
-            const retryBtn = document.createElement('button');
-            retryBtn.textContent = 'Retry Scan';
-            retryBtn.className = 'btn btn-primary mt-2';
-            retryBtn.onclick = function() {
-                startVideo();
-                canvas.style.display = 'none';
-                if (debugInfo) {
-                    debugInfo.style.display = 'none';
-                }
-            };
-            
-            if (debugInfo) {
-                debugInfo.appendChild(retryBtn);
-            }
-        }
-    }
-    
-    // Add digital zoom controls to the camera
-    function addZoomControls() {
-        let zoomLevel = 1.0;
-        const zoomStep = 0.1;
-        const maxZoom = 3.0;
-        
-        // Remove existing controls if any
-        const existingControls = document.getElementById('camera-zoom-controls');
-        if (existingControls) {
-            existingControls.remove();
-        }
-        
-        // Create zoom controls container
-        const zoomControls = document.createElement('div');
-        zoomControls.id = 'camera-zoom-controls';
-        zoomControls.style.position = 'absolute';
-        zoomControls.style.top = '10px';
-        zoomControls.style.right = '10px';
-        zoomControls.style.display = 'flex';
-        zoomControls.style.flexDirection = 'column';
-        zoomControls.style.zIndex = '100';
-        
-        // Create zoom in button
-        const zoomInBtn = document.createElement('button');
-        zoomInBtn.innerHTML = '<span class="material-symbols-outlined">zoom_in</span>';
-        zoomInBtn.style.width = '40px';
-        zoomInBtn.style.height = '40px';
-        zoomInBtn.style.borderRadius = '50%';
-        zoomInBtn.style.backgroundColor = 'rgba(255, 255, 255, 0.7)';
-        zoomInBtn.style.border = 'none';
-        zoomInBtn.style.boxShadow = '0 2px 5px rgba(0, 0, 0, 0.2)';
-        zoomInBtn.style.margin = '5px';
-        zoomInBtn.style.cursor = 'pointer';
-        
-        // Create zoom out button
-        const zoomOutBtn = document.createElement('button');
-        zoomOutBtn.innerHTML = '<span class="material-symbols-outlined">zoom_out</span>';
-        zoomOutBtn.style.width = '40px';
-        zoomOutBtn.style.height = '40px';
-        zoomOutBtn.style.borderRadius = '50%';
-        zoomOutBtn.style.backgroundColor = 'rgba(255, 255, 255, 0.7)';
-        zoomOutBtn.style.border = 'none';
-        zoomOutBtn.style.boxShadow = '0 2px 5px rgba(0, 0, 0, 0.2)';
-        zoomOutBtn.style.margin = '5px';
-        zoomOutBtn.style.cursor = 'pointer';
-        
-        // Create zoom indicator
-        const zoomIndicator = document.createElement('div');
-        zoomIndicator.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-        zoomIndicator.style.color = 'white';
-        zoomIndicator.style.padding = '5px';
-        zoomIndicator.style.borderRadius = '10px';
-        zoomIndicator.style.textAlign = 'center';
-        zoomIndicator.style.margin = '5px';
-        zoomIndicator.style.fontSize = '12px';
-        zoomIndicator.textContent = `${zoomLevel.toFixed(1)}x`;
-        
-        // Add event listeners
-        zoomInBtn.addEventListener('click', () => {
-            if (zoomLevel < maxZoom) {
-                zoomLevel += zoomStep;
-                applyZoom();
-            }
-        });
-        
-        zoomOutBtn.addEventListener('click', () => {
-            if (zoomLevel > 1.0) {
-                zoomLevel -= zoomStep;
-                applyZoom();
-            }
-        });
-        
-        // Function to apply zoom
-        function applyZoom() {
-            if (videoElem) {
-                zoomLevel = Math.min(Math.max(zoomLevel, 1.0), maxZoom);
-                zoomIndicator.textContent = `${zoomLevel.toFixed(1)}x`;
-                
-                // Apply transform to zoom
-                videoElem.style.transform = `scale(${zoomLevel})`;
-                videoElem.style.transformOrigin = 'center';
-            }
-        }
-        
-        // Add to DOM
-        zoomControls.appendChild(zoomInBtn);
-        zoomControls.appendChild(zoomIndicator);
-        zoomControls.appendChild(zoomOutBtn);
-        
-        // Add to camera container
-        const cameraContainer = document.querySelector('.camera-container');
-        if (cameraContainer) {
-            cameraContainer.appendChild(zoomControls);
-        }
-    }
-    
-    // Function to restart video after taking a photo
-    function startVideo() {
-        // Make canvas invisible again
-        const canvas = document.getElementById('camera-canvas');
-        if (canvas) {
-            canvas.style.display = 'none';
-        }
-        
-        // Hide any debug info
-        const debugInfo = document.getElementById('camera-debug-info');
-        if (debugInfo) {
-            debugInfo.style.display = 'none';
-        }
-        
-        // Restart the camera
-        startCamera();
-    }
-    
-    // Stop video stream but keep UI elements
-    function stopVideo() {
-        // Stop the actual video stream
-        if (videoElem && videoElem.srcObject) {
-            const tracks = videoElem.srcObject.getTracks();
-            tracks.forEach(track => track.stop());
-            videoElem.srcObject = null;
-        }
-    }
-    
-    // Function to create the debug info element if it doesn't exist
-    function createDebugInfoElement() {
-        const debugInfo = document.createElement('div');
-        debugInfo.id = 'camera-debug-info';
-        debugInfo.className = 'camera-debug-info';
-        debugInfo.style.width = '100%';
-        debugInfo.style.marginTop = '15px';
-        debugInfo.style.padding = '10px';
-        debugInfo.style.backgroundColor = '#f8f9fa';
-        debugInfo.style.border = '1px solid #ddd';
-        debugInfo.style.borderRadius = '4px';
-        debugInfo.style.fontSize = '14px';
-        
-        // Find where to append the debug element
-        const cameraContainer = document.getElementById('camera-container');
-        if (cameraContainer) {
-            cameraContainer.appendChild(debugInfo);
-        } else {
-            // Fallback to appending to the modal content
-            const modalContent = document.querySelector('.camera-modal-content');
-            if (modalContent) {
-                modalContent.appendChild(debugInfo);
-            }
-        }
-        
-        return debugInfo;
-    }
-    
-    // Helper function to log debug messages to the debug info element
-    function debugLog(message, targetElement = null) {
-        console.log(message);
-        
-        // Log to debug panel if available
-        const debugElement = targetElement || document.getElementById('camera-debug-info');
-        if (debugElement) {
-            const timestamp = new Date().toLocaleTimeString();
-            const logEntry = document.createElement('div');
-            logEntry.innerHTML = `<span class="text-secondary">[${timestamp}]</span> ${message}`;
-            debugElement.appendChild(logEntry);
-            debugElement.scrollTop = debugElement.scrollHeight; // Auto-scroll to bottom
-        }
-    }
-    
-    // Function to attempt to detect barcode patterns in an image
-    function detectBarcodeInImage(imageData) {
-        const width = imageData.width;
-        const height = imageData.height;
-        const data = imageData.data;
-        
-        // Sample multiple rows across the image for better detection
-        const rowsToSample = 7;
-        const rowSpacing = Math.floor(height / (rowsToSample + 1));
-        
-        let detectedInAnyRow = false;
-        let totalTransitions = 0;
-        
-        // For each sample row
-        for (let sampleIndex = 0; sampleIndex < rowsToSample; sampleIndex++) {
-            const y = (sampleIndex + 1) * rowSpacing; // evenly space the rows
-            
-            // Count transitions between dark and bright along this line
-            let transitions = 0;
-            let lastBright = null;
-            
-            // Sample every few pixels to speed up processing but maintain accuracy
-            const sampleStep = 2;
-            
-            for (let x = 0; x < width; x += sampleStep) {
-                const pixelOffset = (y * width + x) * 4;
-                // Calculate brightness (simple average of RGB)
-                const r = data[pixelOffset];
-                const g = data[pixelOffset + 1];
-                const b = data[pixelOffset + 2];
-                const brightness = (r + g + b) / 3;
-                
-                // Determine if this pixel is "bright"
-                const isBright = brightness > 127;
-                
-                // Count transitions
-                if (lastBright !== null && isBright !== lastBright) {
-                    transitions++;
-                }
-                
-                lastBright = isBright;
-            }
-            
-            totalTransitions += transitions;
-            
-            // Heuristic: A barcode typically has many dark/light transitions
-            if (transitions > 30) {
-                detectedInAnyRow = true;
-                console.log(`Barcode detected in row ${sampleIndex + 1} (y=${y}) with ${transitions} transitions`);
-            }
-        }
-        
-        // Calculate average transitions per row
-        const avgTransitions = totalTransitions / rowsToSample;
-        console.log(`Average transitions per row: ${avgTransitions.toFixed(1)}`);
-        
-        // If barcode was detected in any row, or if the average transitions are high enough
-        const detected = detectedInAnyRow || avgTransitions > 25;
-        console.log(`Final barcode detection result: ${detected ? 'FOUND' : 'NOT FOUND'}`);
-        
-        return detected;
-    }
-    
-    // Function to ask user to manually input the ISBN they see
-    function tryManualIsbnExtraction() {
-        debug('Asking for manual ISBN input');
-        
-        // Make sure canvas is visible with captured image
-        const canvas = document.getElementById('camera-canvas');
-        if (canvas) {
-            canvas.style.display = 'block';
-            canvas.style.width = '100%';
-            canvas.style.maxWidth = '400px';
-            canvas.style.height = 'auto';
-            canvas.style.margin = '10px auto';
-            canvas.style.border = '2px solid #ff6b92';
-            canvas.style.borderRadius = '8px';
-            canvas.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
-        }
-        
-        // Display a helpful message in the debug area
-        const debugInfo = document.getElementById('camera-debug-info') || createDebugInfoElement();
-        debugInfo.style.display = 'block';
-        
-        // Add a header to the debug area if it doesn't have one already
-        if (!debugInfo.querySelector('h4')) {
-            const header = document.createElement('h4');
-            header.textContent = 'Manual ISBN Entry';
-            header.style.marginTop = '15px';
-            debugInfo.appendChild(header);
-        }
-        
-        // Add instructions
-        const instructions = document.createElement('p');
-        instructions.textContent = 'The barcode was detected but could not be decoded automatically. Please enter the ISBN number you can see on the barcode.';
-        instructions.style.marginBottom = '10px';
-        debugInfo.appendChild(instructions);
-        
-        // Create the quick ISBN button for easy entry
-        createQuickIsbnButton();
-        
-        // Update status message with clearer instructions
-        if (cameraStatus) {
-            cameraStatus.textContent = 'ISBN scan failed. Please enter the ISBN you see in the image.';
-        }
-        
-        // Add restart button as well
-        addRestartButton();
-    }
-    
-    // Function to create a quick banner with a button for the user to enter an ISBN
-    function createQuickIsbnButton() {
-        // Remove any existing banner
-        const existingBanner = document.querySelector('.quick-isbn-entry');
-        if (existingBanner) {
-            existingBanner.remove();
-        }
-
-        // Create a new banner
-        const banner = document.createElement('div');
-        banner.className = 'quick-isbn-entry';
-        banner.style.position = 'absolute';
-        banner.style.bottom = '80px';
-        banner.style.left = '0';
-        banner.style.right = '0';
-        banner.style.padding = '15px';
-        banner.style.backgroundColor = 'rgba(255, 255, 255, 0.95)';
-        banner.style.zIndex = '20';
-        banner.style.display = 'flex';
-        banner.style.flexDirection = 'column';
-        banner.style.alignItems = 'center';
-        banner.style.justifyContent = 'center';
-        banner.style.gap = '12px';
-        banner.style.borderTop = '3px solid #FF6B92';
-        banner.style.boxShadow = '0 -2px 10px rgba(0,0,0,0.2)';
-        
-        // Add a title/instructions
-        const instructions = document.createElement('p');
-        instructions.textContent = 'Enter the ISBN from the barcode';
-        instructions.style.margin = '0';
-        instructions.style.fontWeight = 'bold';
-        instructions.style.color = '#1C1C1E';
-        
-        // Add an input field for the ISBN
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.placeholder = 'e.g., 9781234567890';
-        input.style.width = '90%';
-        input.style.padding = '12px';
-        input.style.borderRadius = '8px';
-        input.style.border = '1px solid #ccc';
-        input.style.fontSize = '16px';
-        input.inputMode = 'numeric';
-        
-        // Add a button to use this ISBN
-        const button = document.createElement('button');
-        button.textContent = 'Look Up This ISBN';
-        button.className = 'btn-primary';
-        button.style.margin = '0';
-        button.style.width = '90%';
-        button.style.padding = '12px';
-        
-        // On button click, set the ISBN and trigger lookup
-        button.addEventListener('click', () => {
-            const isbn = input.value.trim();
-            if (isbn) {
-                debug('Using manually entered ISBN: ' + isbn);
-                handleIsbnFound(isbn);
-            } else {
-                input.style.borderColor = 'red';
-                setTimeout(() => {
-                    input.style.borderColor = '#ccc';
-                }, 2000);
-            }
-        });
-        
-        // Add enter key support
-        input.addEventListener('keyup', (event) => {
-            if (event.key === 'Enter') {
-                button.click();
-            }
-        });
-        
-        // Add elements to the banner
-        banner.appendChild(instructions);
-        banner.appendChild(input);
-        banner.appendChild(button);
-        
-        // Add the banner to the camera container
-        cameraContainer.appendChild(banner);
-        
-        // Focus on the input
-        setTimeout(() => input.focus(), 100);
-    }
-    
-    // Process data from scanned code
-    function processCodeData(codeData) {
-        if (!codeData) {
-            debugLog('❌ No code data provided');
-            return;
-        }
-        
-        // Always show the raw scanned data
-        debugLog('──────────────────────────');
-        debugLog(`RAW SCANNED DATA: "${codeData}"`);
-        debugLog('──────────────────────────');
-        
-        // Always show the "use what you see" option regardless of detection success
-        tryManualIsbnExtraction();
-        
-        // Clean the data - remove whitespace and non-alphanumeric characters
-        // while preserving X (valid in ISBN-10)
-        let cleanedData = codeData.replace(/\s+/g, '').replace(/[^0-9X]/gi, '');
-        debugLog(`Cleaned data: "${cleanedData}"`);
-        
-        // Check exact ISBN-13 match (13 digits)
-        const isbn13Pattern = /^(\d{13})$/;
-        const isbn13Match = cleanedData.match(isbn13Pattern);
-        
-        if (isbn13Match) {
-            const isbn13 = isbn13Match[1];
-            debugLog(`✓ Valid ISBN-13 format detected: ${isbn13}`);
-            handleIsbnFound(isbn13);
-            return;
-        } else {
-            debugLog('❌ Not a direct ISBN-13 match');
-        }
-        
-        // Check exact ISBN-10 match (10 digits, possibly ending with X)
-        const isbn10Pattern = /^(\d{9}[\dX])$/i;
-        const isbn10Match = cleanedData.match(isbn10Pattern);
-        
-        if (isbn10Match) {
-            const isbn10 = isbn10Match[1];
-            debugLog(`✓ Valid ISBN-10 format detected: ${isbn10}`);
-            handleIsbnFound(isbn10);
-            return;
-        } else {
-            debugLog('❌ Not a direct ISBN-10 match');
-        }
-        
-        // Try to extract an ISBN pattern from a longer string
-        debugLog('Attempting to extract ISBN pattern from longer string...');
-        
-        // Look for ISBN-13 pattern within longer string
-        const embeddedIsbn13Pattern = /(\d{13})/;
-        const embeddedIsbn13Match = codeData.match(embeddedIsbn13Pattern);
-        
-        if (embeddedIsbn13Match) {
-            const potentialIsbn13 = embeddedIsbn13Match[1];
-            debugLog(`✓ Found potential ISBN-13 within string: ${potentialIsbn13}`);
-            handleIsbnFound(potentialIsbn13);
-            return;
-        } else {
-            debugLog('❌ No embedded ISBN-13 pattern found');
-        }
-        
-        // Look for ISBN-10 pattern within longer string
-        const embeddedIsbn10Pattern = /(\d{9}[\dX])/i;
-        const embeddedIsbn10Match = codeData.match(embeddedIsbn10Pattern);
-        
-        if (embeddedIsbn10Match) {
-            const potentialIsbn10 = embeddedIsbn10Match[1];
-            debugLog(`✓ Found potential ISBN-10 within string: ${potentialIsbn10}`);
-            handleIsbnFound(potentialIsbn10);
-            return;
-        } else {
-            debugLog('❌ No embedded ISBN-10 pattern found');
-        }
-        
-        // Try with hyphenated variants (some barcodes include hyphens)
-        debugLog('Checking for hyphenated ISBN formats...');
-        const hyphenatedPattern = /ISBN[-:]?\s*([\d-]+X?)/i;
-        const hyphenatedMatch = codeData.match(hyphenatedPattern);
-        
-        if (hyphenatedMatch) {
-            const hyphenatedIsbn = hyphenatedMatch[1].replace(/-/g, '');
-            debugLog(`✓ Found hyphenated ISBN format: ${hyphenatedIsbn}`);
-            handleIsbnFound(hyphenatedIsbn);
-            return;
-        } else {
-            debugLog('❌ No hyphenated ISBN pattern found');
-        }
-        
-        // Last resort: Try to find any sequence of 10 or 13 consecutive digits
-        debugLog('Last resort: Looking for 10 or 13 consecutive digits...');
-        const digitsPattern = /(\d{10}|\d{13})/;
-        const digitsMatch = codeData.match(digitsPattern);
-        
-        if (digitsMatch) {
-            const digits = digitsMatch[1];
-            debugLog(`✓ Found ${digits.length}-digit sequence: ${digits}`);
-            handleIsbnFound(digits);
-            return;
-        }
-        
-        debugLog('❌ Failed to find a valid ISBN pattern');
-        debugLog('Please check the raw data above and enter ISBN manually if visible');
-    }
-    
-    // Helper function to try to extract valid ISBN from a longer string
-    function extractValidIsbnFromString(str) {
-        // Try to find a 13-digit ISBN
-        const isbn13Match = str.match(/(?:978|979)\d{10}/);
-        if (isbn13Match) return isbn13Match[0];
-        
-        // Try to find a 10-digit ISBN
-        const isbn10Match = str.match(/\d{9}[\dX]/);
-        if (isbn10Match) return isbn10Match[0];
-        
-        return null;
-    }
-    
-    // Function to handle a found ISBN
-    function handleIsbnFound(isbn) {
-        debug('ISBN found: ' + isbn);
-        
-        // Update the manual ISBN input field
-        if (isbnManualInput) {
-            isbnManualInput.value = isbn;
-        }
-        
-        // Stop the camera
-        stopCamera();
-        
-        // Show ISBN input container if not already visible
-        if (isbnInputContainer && !isbnInputContainer.classList.contains('visible')) {
-            showIsbnInputModal();
-        }
-        
-        // Trigger the lookup if lookup button exists
-        if (isbnLookupButton) {
-            debug('Clicking lookup button');
-            isbnLookupButton.click();
-        }
-    }
-    
-    // ... existing code ...
-
-    // Function to add a restart button to take another photo
-    function addRestartButton() {
-        const debugInfo = document.getElementById('camera-debug-info') || createDebugInfoElement();
-        
-        // Remove existing restart button if any
-        const existingButton = debugInfo.querySelector('.restart-button');
-        if (existingButton) {
-            existingButton.remove();
-        }
-        
-        const restartButton = document.createElement('button');
-        restartButton.textContent = 'Take Another Photo';
-        restartButton.className = 'btn btn-primary mt-3 restart-button';
-        restartButton.addEventListener('click', () => {
-            // Hide canvas and show video again
-            const canvas = document.getElementById('camera-canvas');
-            const video = document.getElementById('scanner-video');
-            
-            // Reset canvas styling
-            canvas.style.maxWidth = '';
-            canvas.style.height = '';
-            canvas.style.border = '';
-            
-            canvas.classList.add('hidden');
-            video.classList.remove('hidden');
-            
-            // Restart video if it was stopped
-            if (!video.srcObject) {
-                initBarcodeScanner();
-            } else {
-                video.play();
-            }
-            
-            if (cameraStatus) {
-                cameraStatus.textContent = 'Position barcode in the frame and tap the button';
-            }
-            
-            // Clear debug info
-            debugInfo.innerHTML = '';
-        });
-        
-        debugInfo.appendChild(restartButton);
-    }
-}
-
-// End of script
