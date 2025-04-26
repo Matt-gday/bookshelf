@@ -1286,6 +1286,14 @@ button > span.material-symbols-outlined:only-child {
     margin-bottom: 0.5rem;
     font-size: 0.9rem;
     color: var(--text-color-medium);
+    font-weight: 500;
+}
+
+.isbn-hint {
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--text-color-medium);
+    font-style: italic;
 }
 
 .input-group {

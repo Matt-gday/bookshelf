@@ -1781,7 +1781,7 @@ document.addEventListener('DOMContentLoaded', function() {
     renderBooks();
 
     // Initialize the barcode scanner
-    initBarcodeScanner();
+    // initBarcodeScanner(); // Removed barcode scanning functionality
 });
 
 // --- Re-add Handler for Removing Custom Cover ---
