@@ -318,6 +318,7 @@ button > span.material-symbols-outlined:only-child {
     border-bottom: 1px solid var(--border-color-light);
     margin-bottom: 1rem;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    
 }
 
 .controls-group {
@@ -742,14 +743,15 @@ body:has(.modal-container.visible) .bottom-nav {
 }
 
 .modal-content {
-    background-color: var(--card-bg);
-    border-radius: var(--border-radius-lg);
+    background: linear-gradient(135deg, #fff 80%, #ffe3ed 100%);
+    border-radius: 20px;
+    box-shadow: 0 8px 32px rgba(90, 200, 250, 0.08), 0 1.5px 8px rgba(255, 107, 146, 0.10);
+    padding: 2.2rem 2rem 2rem 2rem;
+    border: 1.5px solid var(--border-color-light);
     width: 90%;
     max-width: 500px;
     max-height: 90vh;
     overflow-y: auto;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-    padding: 1.5rem;
     transform: translateY(20px);
     transition: transform 0.3s ease;
     position: relative;
@@ -924,79 +926,195 @@ body:has(.modal-container.visible) .bottom-nav {
 
 .book-detail-content {
     position: relative;
+    padding-bottom: 0.5rem;
 }
 
 .detail-header {
     display: flex;
-    gap: 1.5rem;
-    margin-bottom: 1.5rem;
+    gap: 2.2rem;
+    margin-bottom: 2rem;
     align-items: flex-start;
+    border-bottom: 1.5px solid #f2f2f7;
+    padding-bottom: 1.2rem;
 }
 
 .detail-cover-image {
-    width: 120px;
-    border-radius: var(--border-radius-md);
-    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
-    border: 1px solid var(--border-color-light);
+    width: 130px;
+    border-radius: 16px;
+    box-shadow: 0 4px 18px rgba(90, 200, 250, 0.10), 0 1.5px 8px rgba(255, 107, 146, 0.10);
+    border: 2.5px solid #ffe3ed;
+    background: #fff;
 }
 
-.detail-title-author h2 { /* This is the Title in Detail View */
-    font-size: 1.4rem;
-    margin-bottom: 0.3rem;
+.detail-title-author {
+    text-align: left;
+    align-items: flex-start;
 }
 
-.detail-title-author h3 { /* Author */
-    font-size: 1rem;
-    font-weight: 500;
-    color: var(--text-color-medium);
-    margin-bottom: 0.3rem;
-}
-
-.detail-title-author p#detail-series {
-    font-size: 0.9rem;
-    color: var(--accent-color);
-    margin-bottom: 0.5rem;
-}
-
-.detail-title-author .star-rating {
-    margin-top: 0.5rem;
-}
-
-.detail-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: 1rem;
-}
-
-.detail-item {
-    margin-bottom: 0.5rem;
-}
-
-.detail-item strong {
+.detail-title-author h2 {
+    font-size: 1.7rem;
+    font-weight: 700;
+    color: var(--primary-color);
+    margin-bottom: 0.2rem;
+    letter-spacing: 0.5px;
+    text-align: left !important;
     display: block;
-    font-size: 0.8rem;
+    width: 100%;
+}
+
+.detail-title-author h3 {
+    font-size: 1.1rem;
+    font-weight: 500;
     color: var(--text-color-medium);
     margin-bottom: 0.2rem;
 }
 
-.detail-item span {
+.detail-title-author p#detail-series {
     font-size: 0.95rem;
+    color: var(--accent-color);
+    font-style: italic;
+    background: rgba(90, 200, 250, 0.10);
+    border-radius: 12px;
+    display: inline-block;
+    padding: 2px 12px;
+    margin-bottom: 0.5rem;
 }
 
-.synopsis-text, .notes-text {
+.detail-title-author .star-rating {
+    margin-top: 0.7rem;
+    font-size: 1.2rem;
+    color: var(--star-color);
+}
+
+.detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1.2rem 1.5rem;
+    margin-top: 1.2rem;
+}
+
+.detail-item {
+    background: #faf7fa;
+    border-radius: 12px;
+    padding: 1.1rem 1.2rem 0.7rem 1.2rem;
+    box-shadow: 0 1px 4px rgba(255, 107, 146, 0.04);
+    border-left: 4px solid #ffe3ed;
+    margin-bottom: 0;
+}
+
+.detail-item strong {
+    display: block;
+    font-size: 0.82rem;
+    color: var(--primary-color);
+    margin-bottom: 0.18rem;
+    letter-spacing: 0.2px;
+}
+
+.detail-item span, .detail-item p {
+    font-size: 1.01rem;
+    color: var(--text-color-dark);
+    font-weight: 500;
+}
+
+.detail-item span#detail-status {
+    display: inline-block;
+    background: rgba(255, 107, 146, 0.20);
+    color: var(--primary-color);
+    border-radius: 8px;
+    padding: 2px 10px;
     font-size: 0.95rem;
+    font-weight: 600;
+    margin-top: 2px;
+}
+
+.detail-item span#detail-reader {
+    background: rgba(90, 200, 250, 0.20);
+    color: var(--accent-color);
+    border-radius: 8px;
+    padding: 2px 10px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-top: 2px;
+}
+
+.detail-item span#detail-tags {
+    background: rgba(255, 204, 0, 0.20);
+    color: var(--star-color);
+    border-radius: 8px;
+    padding: 2px 10px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-top: 2px;
+}
+
+.detail-item span#detail-genres {
+    background: rgba(90, 200, 250, 0.20);
+    color: var(--accent-color);
+    border-radius: 8px;
+    padding: 2px 10px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-top: 2px;
+}
+
+.detail-item span#detail-series {
+    background: rgba(255, 107, 146, 0.10);
+    color: var(--primary-color);
+    border-radius: 8px;
+    padding: 2px 10px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-top: 2px;
+}
+
+.detail-item span#detail-status, .detail-item span#detail-reader, .detail-item span#detail-tags, .detail-item span#detail-genres, .detail-item span#detail-series {
+    display: inline-block;
+}
+
+.detail-item p#detail-synopsis {
+    font-size: 0.98rem;
+    color: var(--text-color-medium);
+    margin-top: 0.3rem;
+    margin-bottom: 0;
     line-height: 1.6;
+}
+
+#detail-review-section {
+    background: linear-gradient(90deg, #ffe3ed 60%, #fff 100%);
+    border-radius: 14px;
+    border-left: 5px solid var(--primary-color);
     margin-top: 1.5rem;
+    margin-bottom: 0.5rem;
+    padding: 1.2rem 1.2rem 1.2rem 1.5rem;
+    box-shadow: 0 2px 8px rgba(255, 107, 146, 0.07);
+    position: relative;
 }
-
+#detail-review-section strong {
+    color: var(--primary-color);
+    font-size: 1.05rem;
+    margin-bottom: 0.5rem;
+}
 #detail-review-text {
-    font-size: 0.95rem;
-    line-height: 1.6;
-    padding: 1rem;
-    background-color: rgba(255, 107, 146, 0.05);
-    border-radius: var(--border-radius-md);
-    border-left: 3px solid var(--primary-color);
-    margin-top: 0.5rem;
+    font-size: 1.05rem;
+    font-style: italic;
+    color: var(--text-color-dark);
+    margin: 0.2rem 0 0 0;
+    padding: 0;
+    background: none;
+    border: none;
+    border-radius: 0;
+    line-height: 1.7;
+    position: relative;
+}
+#detail-review-section:before {
+    content: '\201C';
+    font-size: 2.5rem;
+    color: #ff6b92;
+    position: absolute;
+    left: 12px;
+    top: 10px;
+    opacity: 0.18;
+    font-family: serif;
 }
 
 /* Material Icons Adjustments */
@@ -1258,6 +1376,7 @@ button > span.material-symbols-outlined:only-child {
     
     .grid-view .book-info {
         padding: 0.6rem;
+        padding-bottom: 0.0rem;
     }
     
     .grid-view .book-title {
@@ -1344,9 +1463,13 @@ button > span.material-symbols-outlined:only-child {
     /* Detail view adjustments */
     .detail-header {
         flex-direction: column;
-        align-items: center;
-        text-align: center;
-        gap: 1rem;
+        align-items: flex-start;
+        text-align: left;
+    }
+    
+    .detail-title-author {
+        text-align: left;
+        align-items: flex-start;
     }
     
     .detail-cover-image {
@@ -2094,4 +2217,25 @@ button > span.material-symbols-outlined:only-child {
 
 .dark-mode .app-title {
     color: var(--primary-color);
-} 
+}
+
+.dark-mode #book-detail-modal .modal-content,
+.dark-mode #book-detail-modal .modal-body,
+.dark-mode #book-detail-modal .detail-header,
+.dark-mode #book-detail-modal .detail-title-author,
+.dark-mode #book-detail-modal .detail-item,
+.dark-mode #book-detail-modal .detail-item strong,
+.dark-mode #book-detail-modal .detail-item span,
+.dark-mode #book-detail-modal .detail-item p {
+  color: #1C1C1E !important;
+}
+
+.dark-mode #book-detail-modal .modal-content h2 {
+  color: #1C1C1E !important;
+}
+
+.detail-item span-2, .detail-item.span-2, #detail-synopsis.detail-item {
+  grid-column: 1 / -1;
+}
+
+/*

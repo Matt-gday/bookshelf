@@ -728,6 +728,9 @@ function showAddBookModal(skipReset = false, title = "Add New Book") {
              formCoverPreview.src = '#'; // Clear preview source
              formCoverPreview.style.display = 'none'; // Hide preview on reset
         }
+        // Clear the visible synopsis display text
+        const synopsisDisplayText = addBookForm.querySelector('#synopsis-display-text');
+        if (synopsisDisplayText) synopsisDisplayText.textContent = '';
     }
     if (addBookFormTitle) { addBookFormTitle.textContent = title; }
     populateSeriesDatalist();
@@ -1543,13 +1546,33 @@ function startEditBook(bookId) {
 function updateFileNameDisplay() {
     const fileInput = document.getElementById('userCoverImage');
     const fileNameDisplay = document.getElementById('file-name-display');
-    
+    const formCoverPreview = document.getElementById('form-cover-preview');
     if (fileInput && fileNameDisplay) {
         fileInput.addEventListener('change', function() {
             if (fileInput.files.length > 0) {
-                fileNameDisplay.textContent = fileInput.files[0].name;
+                const file = fileInput.files[0];
+                fileNameDisplay.textContent = file.name;
+
+                // Read the file and update preview and data URL
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    selectedCoverImageDataUrl = e.target.result;
+                    if (formCoverPreview) {
+                        formCoverPreview.src = selectedCoverImageDataUrl;
+                        formCoverPreview.style.display = 'block';
+                        formCoverPreview.classList.remove('placeholder');
+                        formCoverPreview.classList.add('custom-cover');
+                    }
+                };
+                reader.readAsDataURL(file);
             } else {
                 fileNameDisplay.textContent = 'No file chosen';
+                selectedCoverImageDataUrl = null;
+                if (formCoverPreview) {
+                    formCoverPreview.src = '#';
+                    formCoverPreview.style.display = 'none';
+                    formCoverPreview.classList.remove('custom-cover');
+                }
             }
         });
     }
@@ -2578,4 +2601,24 @@ document.addEventListener('DOMContentLoaded', function() {
     allBooks = loadBooksFromStorage();
     populateSeriesDatalist();
     renderBooks();
+    
+    // Ensure custom cover upload works
+    updateFileNameDisplay();
+
+    // Remove custom cover functionality
+    if (removeCustomCoverBtn) {
+        removeCustomCoverBtn.addEventListener('click', function() {
+            selectedCoverImageDataUrl = null;
+            customCoverRemoved = true;
+            const fileInput = document.getElementById('userCoverImage');
+            const fileNameDisplay = document.getElementById('file-name-display');
+            if (fileInput) fileInput.value = '';
+            if (fileNameDisplay) fileNameDisplay.textContent = 'No file chosen';
+            if (formCoverPreview) {
+                formCoverPreview.src = '#';
+                formCoverPreview.style.display = 'none';
+                formCoverPreview.classList.remove('custom-cover');
+            }
+        });
+    }
 });
