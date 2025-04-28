@@ -462,5 +462,20 @@
 
     <!-- Filter/Sort Panel Placeholder -->
 
+    <!-- Reset Confirmation Modal (Initially Hidden via CSS) -->
+    <div id="reset-confirm-modal" class="modal-container">
+        <div class="modal-content">
+            <h2>Reset All Data?</h2>
+            <div class="modal-body">
+                <p style="font-size:1.1rem; color:#d32f2f; font-weight:500; text-align:center;">Are you sure you want to reset all bookshelf data? This cannot be undone.</p>
+            </div>
+            <div class="form-actions">
+                <button type="button" id="reset-confirm-ok-btn" class="btn-danger" aria-label="Confirm Reset"><span class="material-symbols-outlined">delete_forever</span> Yes, Reset</button>
+                <button type="button" id="reset-confirm-cancel-btn" class="btn-secondary" aria-label="Cancel Reset"><span class="material-symbols-outlined">close</span> Cancel</button>
+            </div>
+        </div>
+    </div>
+    <!-- End Reset Confirmation Modal -->
+
 </body>
 </html> 

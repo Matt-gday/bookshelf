@@ -1734,20 +1734,18 @@ function handleAddBookSubmit(event) {
 
 // --- Data Reset ---
 function resetAllData() {
-    if (confirm("Are you sure you want to reset all bookshelf data? This cannot be undone.")) {
-        try {
-            localStorage.removeItem(STORAGE_KEY);
-            localStorage.removeItem(SERIES_STORAGE_KEY);
-            allBooks = [];
-            currentlyFetchedApiData = null; currentlyEditingBookId = null;
-            isSearchActive = false; currentSearchTerm = ''; isWishlistViewActive = false;
-            if(searchBtn) searchBtn.textContent = 'Search';
-            if(wishlistBtn) { wishlistBtn.textContent = 'Wishlist'; wishlistBtn.classList.remove('active'); }
-            renderBooks();
-            populateSeriesDatalist();
-            alert("Bookshelf data has been reset.");
-        } catch (error) { console.error("Error clearing data:", error); alert("An error occurred resetting data."); }
-    }
+    try {
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(SERIES_STORAGE_KEY);
+        allBooks = [];
+        currentlyFetchedApiData = null; currentlyEditingBookId = null;
+        isSearchActive = false; currentSearchTerm = ''; isWishlistViewActive = false;
+        if(searchBtn) searchBtn.textContent = 'Search';
+        if(wishlistBtn) { wishlistBtn.textContent = 'Wishlist'; wishlistBtn.classList.remove('active'); }
+        renderBooks();
+        populateSeriesDatalist();
+        alert("Bookshelf data has been reset.");
+    } catch (error) { console.error("Error clearing data:", error); alert("An error occurred resetting data."); }
 }
 
 
@@ -2235,7 +2233,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Reset data button
-    if (resetDataButton) resetDataButton.addEventListener('click', resetAllData);
     
     // Search modal
         if (searchSubmitBtn) searchSubmitBtn.addEventListener('click', performSearch);
@@ -2621,4 +2618,28 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+
+    // --- Custom Reset Confirmation Modal Logic ---
+    const resetConfirmModal = document.getElementById('reset-confirm-modal');
+    const resetConfirmOkBtn = document.getElementById('reset-confirm-ok-btn');
+    const resetConfirmCancelBtn = document.getElementById('reset-confirm-cancel-btn');
+
+    if (resetDataButton) {
+      // Remove any previous event listeners by setting onclick directly
+      resetDataButton.onclick = function() {
+        if (resetConfirmModal) showModal(resetConfirmModal);
+      };
+    }
+    if (resetConfirmOkBtn) {
+      resetConfirmOkBtn.onclick = function() {
+        hideModal(resetConfirmModal);
+        resetAllData();
+      };
+    }
+    if (resetConfirmCancelBtn) {
+      resetConfirmCancelBtn.onclick = function() {
+        hideModal(resetConfirmModal);
+      };
+    }
+    // --- END Custom Reset Confirmation Modal Logic ---
 });
