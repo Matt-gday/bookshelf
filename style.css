@@ -2249,4 +2249,13 @@ button > span.material-symbols-outlined:only-child {
   background-color: #b71c1c;
 }
 
+.dark-mode #add-book-form-container .modal-content > h2,
+.dark-mode #search-modal .modal-content > h2 {
+  color: #1C1C1E !important;
+}
+
+.dark-mode #isbn-input-container .modal-content > h2 {
+  color: #1C1C1E !important;
+}
+
 /*
