@@ -1279,7 +1279,7 @@ button > span.material-symbols-outlined:only-child {
     }
     
     .btn-rate-book, .btn-add-to-bookshelf {
-        font-size: 0.7rem;
+        font-size: 0.6rem;
         padding: 0.25rem 0.5rem;
         line-height: 1.2;
     }
