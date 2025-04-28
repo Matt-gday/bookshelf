@@ -116,7 +116,7 @@
     font-family: 'Yellowtail', cursive;
     font-size: 1.6rem;
     display: block;
-    margin-bottom: -0.1rem;
+    margin-bottom: -0.3rem;
     font-weight: 400;
 }
 
@@ -382,7 +382,15 @@ button > span.material-symbols-outlined:only-child {
 #wishlist-nav-btn.active,
 #search-nav-btn.active {
     color: white;
-    background-color: rgba(255, 255, 255, 0.3);
+    background-color: var(--primary-color);
+    border-radius: 12px;
+}
+
+.dark-mode #filter-nav-btn.active,
+.dark-mode #wishlist-nav-btn.active,
+.dark-mode #search-nav-btn.active {
+    color: var(--primary-color);
+    background-color: transparent;
 }
 
 /* === Book Display === */
@@ -572,13 +580,29 @@ button > span.material-symbols-outlined:only-child {
 }
 
 .btn-add-to-bookshelf {
-    background-color: var(--bg-color);
+    background-color: rgba(52, 199, 89, 0.15);
+    color: var(--success-color);
+    flex-shrink: 0;
+    padding: 0.4rem 0.6rem;
+    font-size: 0.8rem;
+    width: 100%;
+    text-align: center;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-weight: bold;
+    border-radius: 100px;
+    margin-top: 5px;
 }
 
-.btn-rate-book:hover,
 .btn-add-to-bookshelf:hover {
-    background-color: var(--primary-color);
-    color: white;
+    background-color: rgba(52, 199, 89, 0.25);
+    transform: translateY(-1px);
+}
+
+/* Move the grid view button to the status and ratings container */
+.status-and-rating .btn-add-to-bookshelf {
+    margin-top: 6px !important;
 }
 
 #interactive-stars {
@@ -696,12 +720,20 @@ button > span.material-symbols-outlined:only-child {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 1000;
+    z-index: 10000; /* Increased z-index */
     opacity: 0;
     visibility: hidden;
     transition: opacity 0.3s ease, visibility 0.3s ease;
     backdrop-filter: blur(3px);
     -webkit-backdrop-filter: blur(3px);
+}
+
+/* Hide bottom nav when modal is visible */
+.modal-container.visible ~ .bottom-nav,
+body:has(.modal-container.visible) .bottom-nav {
+    visibility: hidden !important;
+    opacity: 0 !important;
+    z-index: -1 !important;
 }
 
 .modal-container.visible {
@@ -742,6 +774,10 @@ button > span.material-symbols-outlined:only-child {
     overflow-y: auto;
     padding: 0 0.5rem;
     margin-bottom: 1.5rem;
+}
+
+#rating-modal-actions.form-actions {
+    border-top: none;
 }
 
 .modal-content .form-actions {
@@ -994,7 +1030,7 @@ button > span.material-symbols-outlined:only-child {
     bottom: 0;
     left: 0;
     right: 0;
-    background-color: rgba(255, 255, 255, 0.9);
+    background-color: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     display: flex !important;
@@ -1012,17 +1048,19 @@ button > span.material-symbols-outlined:only-child {
     align-items: center !important;
     justify-content: center !important;
     padding: 0.5rem;
-    color: var(--text-color-medium);
-    background: none;
+    color: var(--primary-color); /* Pink text for inactive buttons */
+    background: transparent;
     border: none;
     font-size: 0.7rem;
     width: 70px; /* Fixed width instead of max-width */
     height: auto !important; /* Prevent height manipulation */
     margin: 0 5px; /* Reduced margin for closer spacing */
-    transition: color 0.2s ease;
+    transition: all 0.2s ease;
     pointer-events: auto !important;
     opacity: 1 !important;
     visibility: visible !important;
+    position: relative !important;
+    z-index: 10 !important;
 }
 
 .bottom-nav-button .material-symbols-outlined {
@@ -1031,21 +1069,46 @@ button > span.material-symbols-outlined:only-child {
     display: block !important; /* Force icon to always be visible */
     visibility: visible !important;
     opacity: 1 !important;
+    position: relative !important;
+    z-index: 15 !important;
 }
 
 .bottom-nav-button span:not(.material-symbols-outlined) {
     display: block !important; /* Force text to always be visible */
     visibility: visible !important;
     opacity: 1 !important;
+    font-size: 0.7rem !important;
+    position: relative !important;
+    z-index: 15 !important;
 }
 
-.bottom-nav-button:hover {
-    color: var(--primary-color);
-    background: none;
-}
-
+/* Active button styling - reverse colors */
 .bottom-nav-button.active {
-    color: var(--primary-color);
+    color: white !important; /* White text */
+    background-color: var(--primary-color) !important; /* Pink background */
+    border-radius: 12px !important; /* Rounded corners */
+}
+
+/* Hover effect */
+.bottom-nav-button:hover:not(.active) {
+    opacity: 0.8 !important;
+}
+
+/* Dark mode styles for bottom nav */
+.dark-mode .bottom-nav {
+    background-color: rgba(44, 44, 46, 0.95); /* Dark, semi-transparent background */
+    border-top-color: #3A3A3C; /* Slightly more visible border in dark mode */
+}
+
+/* Inactive buttons in dark mode */
+.dark-mode .bottom-nav-button {
+    color: #FFFFFF; /* White text for inactive buttons in dark mode */
+}
+
+/* Active buttons in dark mode */
+.dark-mode .bottom-nav-button.active {
+    color: var(--primary-color); /* Pink text for active buttons */
+    background-color: transparent; /* Keep background unchanged */
 }
 
 /* Book Status Badges */
@@ -1092,7 +1155,7 @@ button > span.material-symbols-outlined:only-child {
 }
 
 /* Media Queries for Responsive Design */
-@media (max-width: 767px) {
+@media (max-width: 767px) { 
     :root {
         --base-font-size: 15px;
         --border-radius-lg: 16px;
@@ -1102,18 +1165,53 @@ button > span.material-symbols-outlined:only-child {
     
     /* Bottom nav adjustments for mobile */
     .bottom-nav {
-        padding: 0.4rem 0.3rem;
+        padding: 0.4rem 0.3rem !important;
+        display: flex !important;
+        justify-content: center !important;
+        z-index: 9999 !important;
     }
     
     .bottom-nav-button {
-        padding: 0.3rem 0.2rem;
-        font-size: 0.6rem;
-        max-width: 65px;
+        padding: 0.3rem 0.2rem !important;
+        font-size: 0.6rem !important;
+        max-width: 65px !important;
+        background-color: transparent !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        opacity: 1 !important;
+        visibility: visible !important;
     }
     
     .bottom-nav-button .material-symbols-outlined {
-        font-size: 1.3rem;
-        margin-bottom: 0.2rem;
+        font-size: 1.3rem !important;
+        margin-bottom: 0.2rem !important;
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        position: relative !important;
+        z-index: 15 !important;
+    }
+    
+    .bottom-nav-button span:not(.material-symbols-outlined) {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        font-size: 0.6rem !important;
+    }
+    
+    /* Ensure active button style is maintained on mobile */
+    .bottom-nav-button.active {
+        background-color: var(--primary-color) !important;
+        color: white !important;
+        border-radius: 10px !important; /* Slightly smaller radius for mobile */
+    }
+    
+    /* Special dark mode tweaks for mobile */
+    .dark-mode .bottom-nav-button.active {
+        background-color: transparent !important;
+        color: var(--primary-color) !important;
     }
     
     /* Adjust bottom padding on body to account for smaller nav */
@@ -1127,7 +1225,7 @@ button > span.material-symbols-outlined:only-child {
     }
     
     .app-title {
-        font-size: 2.2rem;
+        font-size: 1.8rem;
     }
     
     .controls-group {
@@ -1151,7 +1249,7 @@ button > span.material-symbols-outlined:only-child {
     #reset-data-btn { /* No longer hide reset on mobile */
         display: block;
     }
-    
+
     /* Adjust grid for smaller screens */
     .grid-view {
         grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
@@ -1202,7 +1300,7 @@ button > span.material-symbols-outlined:only-child {
     .list-view .book-title {
         font-size: 0.9rem;
     }
-    
+
     /* Modal adjustments */
     .modal-container {
         align-items: flex-end;
@@ -1458,6 +1556,28 @@ button > span.material-symbols-outlined:only-child {
     border-radius: 4px;
 }
 
+.covers-view .covers-unrated-badge {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    background-color: rgba(138, 43, 226, 0.85); /* Purple background */
+    color: #fff;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+    z-index: 2;
+}
+.covers-view .covers-unrated-badge .material-symbols-outlined {
+    font-size: 16px;
+    color: #fff;
+    /* Optionally, add a purple glow or shadow for emphasis */
+    text-shadow: 0 0 4px #8A2BE2, 0 1px 2px rgba(0,0,0,0.15);
+}
+
 /* Media query adjustments for covers view */
 @media (max-width: 1200px) {
     .covers-view {
@@ -1550,11 +1670,25 @@ button > span.material-symbols-outlined:only-child {
 .review-section-area #review-display-area {
     width: 100%;
     text-align: center;
+    border-bottom: none;
 }
 
 .review-section-area #edit-review-btn {
     margin-top: 0.8rem;
     align-self: center;
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color-light);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    padding: 6px 12px;
+    border-radius: var(--border-radius-sm);
+    color: var(--primary-color);
+    position: relative;
+    z-index: 2;
+}
+
+.review-section-area #edit-review-btn:hover {
+    background-color: rgba(255, 107, 146, 0.05);
+    border-color: rgba(255, 107, 146, 0.3);
 }
 
 /* Star rating display that replaces the edit rating button */
@@ -1643,6 +1777,14 @@ button > span.material-symbols-outlined:only-child {
 .review-section-area #edit-review-btn {
     margin-top: 0.8rem;
     align-self: center;
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color-light);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    padding: 6px 12px;
+    border-radius: var(--border-radius-sm);
+    color: var(--primary-color);
+    position: relative;
+    z-index: 2;
 }
 
 .review-section-area textarea {
@@ -1676,15 +1818,29 @@ button > span.material-symbols-outlined:only-child {
 
 .list-view .btn-rate-book {
     align-self: center;
-    font-size: 0.65rem;
-    padding: 0.2rem 0.5rem;
+    font-size: 0.75rem !important;
+    font-weight: 600 !important;
+    padding: 0.3rem 0.7rem !important;
     margin-top: 0;
     margin-right: 0;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     min-width: auto;
     width: auto;
-    display: inline-flex;
+    display: inline-flex !important;
+    background-color: rgba(138, 43, 226, 0.2) !important;
+    color: #8A2BE2 !important;
+    border-radius: 100px !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+    text-align: center !important;
+    justify-content: center !important;
+    align-items: center !important;
+}
+
+.list-view .btn-rate-book:hover {
+    background-color: rgba(138, 43, 226, 0.3) !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15) !important;
 }
 
 /* Media query adjustments for mobile */
@@ -1733,8 +1889,8 @@ button > span.material-symbols-outlined:only-child {
 }
 
 .settings-action-btn .material-symbols-outlined {
-    font-size: 1.3rem;
-}
+        font-size: 1.3rem;
+    }
 
 /* Responsive adjustments */
 @media (max-width: 767px) {

@@ -110,6 +110,11 @@ let activeFilters = {
 let isFilterActive = false;
 let currentSort = { field: 'dateAdded', direction: 'desc' };
 
+// Navigation state tracking
+let previousViewBeforeAdd = null; // Tracks whether library or wishlist was active before add
+let isAddingBook = false; // Flag to track if we're in the add book process
+let addBookCancelled = false; // Flag to track if add book was cancelled
+
 // Rating Modal State
 let currentRatingBookId = null;
 let currentRatingValue = 0;
@@ -140,7 +145,7 @@ let bookDisplayArea, viewToggleButton, addBookButton, isbnInputContainer, isbnMa
     reviewInput, ratingCancelBtn, ratingSaveBtn, ratingCloseBtn,
     searchBtn, searchModal, searchInput, searchSubmitBtn, searchCancelBtn, searchStatusElement,
     wishlistBtn, filterBtn, filterModal, filterForm, filterApplyBtn, filterClearBtn, filterCancelBtn,
-    sortSelect, removeCustomCoverBtn, // Re-add removeCustomCoverBtn variable
+    sortSelect, removeCustomCoverBtn, settingsModal, // Add settingsModal variable
     addManuallyBtn, deleteBookBtn; // Add new button variables
 
 
@@ -233,10 +238,12 @@ function renderBooks() {
         return;
     }
 
-    // Get filtered and sorted books
+    // Get all books first
     let displayBooks = allBooks;
     
-    // Search functionality (keep for now, integrate later)
+    // Apply the appropriate filtering based on view state
+    
+    // Search takes precedence over wishlist view
     if (isSearchActive && currentSearchTerm) {
         const searchLower = currentSearchTerm.toLowerCase();
         displayBooks = displayBooks.filter(book => {
@@ -249,11 +256,14 @@ function renderBooks() {
                 (book.seriesTitle && book.seriesTitle.toLowerCase().includes(searchLower))
             );
         });
-    }
-
-    // Wishlist view filter
-        if (isWishlistViewActive) {
+    } 
+    // If not searching, apply wishlist filter if active
+    else if (isWishlistViewActive) {
         displayBooks = displayBooks.filter(book => book.status === 'Wishlist');
+    } 
+    // Default library view - exclude wishlist books
+    else {
+        displayBooks = displayBooks.filter(book => book.status !== 'Wishlist');
     }
 
     // Apply active filters
@@ -264,11 +274,22 @@ function renderBooks() {
         if (activeFilters.reader && activeFilters.reader.length > 0) {
             displayBooks = displayBooks.filter(book => activeFilters.reader.includes(book.reader));
         }
-        if (activeFilters.targetRating > 0) {
-            displayBooks = displayBooks.filter(book => 
-                (book.personalRating === activeFilters.targetRating) || 
-                (activeFilters.targetRating === -1 && !book.personalRating)
-            );
+        // Fix the rating filter to properly handle unrated books and include half stars
+        if (activeFilters.targetRating !== 0) {
+            displayBooks = displayBooks.filter(book => {
+                // Handle the "unrated" special case (-1)
+                if (activeFilters.targetRating === -1) {
+                    return !book.personalRating; // Only show books with no rating
+                }
+                
+                // For star ratings, include the selected rating and the half-star below
+                // For example, if 4 stars is selected, show both 4 and 3.5 star books
+                const rating = book.personalRating || 0;
+                const minRating = activeFilters.targetRating - 0.5;
+                const maxRating = activeFilters.targetRating;
+                
+                return rating >= minRating && rating <= maxRating;
+            });
         }
     }
 
@@ -325,10 +346,27 @@ function renderBooks() {
 
     // Display empty state if no books match
     if (displayBooks.length === 0) {
+        let emptyMessage;
+        // First check if filters are active - this takes priority
+        if (isFilterActive) {
+            emptyMessage = 'No books match your filters';
+        }
+        // Then check search
+        else if (isSearchActive) {
+            emptyMessage = 'No books match your search';
+        }
+        // Then check wishlist/library view
+        else if (isWishlistViewActive) {
+            emptyMessage = 'Your wishlist is empty';
+        }
+        else {
+            emptyMessage = 'Your bookshelf is empty';
+        }
+        
         bookDisplayArea.innerHTML = `
             <div class="empty-state">
                 <span class="material-symbols-outlined" style="font-size: 3rem; margin-bottom: 1rem;">menu_book</span>
-                <p>${isWishlistViewActive ? 'Your wishlist is empty' : isSearchActive ? 'No books match your search' : isFilterActive ? 'No books match your filters' : 'Your bookshelf is empty'}.</p>
+                <p>${emptyMessage}.</p>
                 <button id="empty-add-book-btn" class="btn-primary">
                     <span class="material-symbols-outlined">add</span> Add a Book
                 </button>
@@ -337,7 +375,13 @@ function renderBooks() {
         // Add listener for the empty state add button
         const emptyAddBtn = document.getElementById('empty-add-book-btn');
         if (emptyAddBtn) {
-            emptyAddBtn.addEventListener('click', showIsbnInputModal);
+            emptyAddBtn.addEventListener('click', function() {
+                // Store current view state
+                previousViewBeforeAdd = isWishlistViewActive ? 'wishlist' : 'library';
+                isAddingBook = true;
+                addBookCancelled = false;
+                showIsbnInputModal();
+            });
         }
         return;
     }
@@ -380,7 +424,7 @@ function renderBooks() {
                                     ? (book.personalRating 
                                         ? `<div class="stars-rating-pill" data-book-id="${book.id}">${renderStars(book.personalRating)}</div>` 
                                         : `<button class="btn-rate-book" data-book-id="${book.id}">Rate Book</button>`)
-                                    : ''}
+                                    : `<button class="btn-add-to-bookshelf" data-book-id="${book.id}">Add to Library</button>`}
                             </div>
                             ${!book.personalRating ? `
                             <div class="static-star-rating">
@@ -389,7 +433,7 @@ function renderBooks() {
                         </div>
                     <div class="book-actions">
                             ${book.status === 'Wishlist' 
-                                ? `<button class="btn-add-to-bookshelf" data-book-id="${book.id}">Add to Bookshelf</button>` 
+                                ? '' 
                                 : ''}
                         </div>
                     </div>
@@ -435,6 +479,7 @@ function renderBooks() {
                         <img src="${book.displayCoverUrl}" alt="Cover of ${book.title}" class="book-cover" onerror="this.src='placeholder-cover.png'">
                         ${book.status === 'Wishlist' ? `<div class="covers-wishlist-badge"><span class="material-symbols-outlined">favorite</span></div>` : ''}
                         ${book.personalRating ? `<div class="covers-rating-badge">${book.personalRating.toFixed(1)}</div>` : ''}
+                        ${(book.status !== 'Wishlist' && !book.personalRating) ? `<div class="covers-unrated-badge"><span class="material-symbols-outlined">star</span></div>` : ''}
                     </a>
                 </div>
             `;
@@ -464,6 +509,19 @@ function handleBookAreaClick(event) {
     const bookId = bookItem.getAttribute('data-book-id') || bookItem.getAttribute('data-id');
     if (!bookId) {
         console.error("Book item clicked but no book ID found");
+        return;
+    }
+
+    // Handle covers view rating badge click (yellow badge)
+    if (event.target.closest('.covers-rating-badge')) {
+        openRatingModal(bookId, false);
+        event.stopPropagation();
+        return;
+    }
+    // Handle covers view unrated badge click (purple star)
+    if (event.target.closest('.covers-unrated-badge')) {
+        openRatingModal(bookId, true);
+        event.stopPropagation();
         return;
     }
 
@@ -508,9 +566,12 @@ function handleAddToBookshelfClick(bookId) {
         return;
     }
 
+    // Store the original status so we can revert if cancelled
+    book._originalStatus = book.status;
+
     // Show the add book form pre-populated with the book data
     book.status = 'Unfinished'; // Default status when adding to bookshelf
-    showAddBookModal(true, `Add ${book.title} to Bookshelf`);
+    showAddBookModal(true, `Add ${book.title} to Library`);
     currentlyEditingBookId = bookId;
 
     // Get the form and populate it
@@ -559,23 +620,99 @@ function handleAddToBookshelfClick(bookId) {
 
 
 // --- Modal Handling Functions ---
+// Function to show modal and hide bottom nav
+function showModal(modalElement) {
+    if (!modalElement) return;
+    
+    // Add visible class to the modal
+    modalElement.classList.add('visible');
+    
+    // Hide bottom navigation when modal is visible
+    const bottomNav = document.querySelector('.bottom-nav');
+    if (bottomNav) {
+        bottomNav.style.visibility = 'hidden';
+        bottomNav.style.opacity = '0';
+        bottomNav.style.zIndex = '-1';
+    }
+}
+
+// Function to hide modal and restore bottom nav if no other modals are visible
+function hideModal(modalElement) {
+    if (!modalElement) return;
+    
+    // Remove visible class from the modal
+    modalElement.classList.remove('visible');
+    
+    // Check if any other modals are visible
+    const visibleModals = document.querySelectorAll('.modal-container.visible');
+    if (visibleModals.length === 0) {
+        // No visible modals, restore bottom navigation
+        const bottomNav = document.querySelector('.bottom-nav');
+        if (bottomNav) {
+            bottomNav.style.visibility = '';
+            bottomNav.style.opacity = '';
+            bottomNav.style.zIndex = '';
+        }
+    }
+}
+
+function clearFilters() {
+    console.log("Clearing all filters");
+    // Reset filter state
+    activeFilters = {
+        status: [],
+        reader: [],
+        targetRating: 0
+    };
+    isFilterActive = false;
+    
+    // Update button highlights directly
+    const homeBtn = document.getElementById('home-nav-btn');
+    const wishlistBtn = document.getElementById('wishlist-nav-btn');
+    const searchBtn = document.getElementById('search-nav-btn');
+    const filterBtn = document.getElementById('filter-nav-btn');
+    
+    // Remove active class from filter button
+    if (filterBtn) filterBtn.classList.remove('active');
+    
+    // Set the correct view button
+    if (isSearchActive && searchBtn) {
+        searchBtn.classList.add('active');
+    } else if (isWishlistViewActive && wishlistBtn) {
+        wishlistBtn.classList.add('active');
+    } else if (homeBtn) {
+        homeBtn.classList.add('active');
+    }
+    
+    renderBooks();
+}
+
 function showIsbnInputModal() {
     if (isbnInputContainer) {
         console.log("[showIsbnInputModal] Showing ISBN modal. Clearing fetched data."); // Log function call
         currentlyFetchedApiData = null;
         if (isbnManualInput) isbnManualInput.value = '';
         if (lookupStatusElement) lookupStatusElement.textContent = 'Type or dictate the ISBN, then click Lookup.';
-        isbnInputContainer.classList.add('visible');
+        showModal(isbnInputContainer);
         if (isbnManualInput) isbnManualInput.focus();
     }
 }
-function hideIsbnInputModal() { if (isbnInputContainer) { isbnInputContainer.classList.remove('visible'); } }
+
+function hideIsbnInputModal() { 
+    if (isbnInputContainer) { 
+        hideModal(isbnInputContainer);
+    } 
+}
 
 function showAddBookModal(skipReset = false, title = "Add New Book") {
     if (!addBookFormContainer || !addBookFormTitle || !addBookForm || !saveBookBtn) {
         console.error("One or more add book modal elements not found!");
         return;
     }
+    
+    isAddingBook = true;
+    addBookCancelled = false;
+    
     customCoverRemoved = false; // Reset flag
     if (!skipReset) {
         currentlyFetchedApiData = null;
@@ -606,16 +743,71 @@ function showAddBookModal(skipReset = false, title = "Add New Book") {
     } else if (!removeCustomCoverBtn) {
         console.error('[showAddBookModal] removeCustomCoverBtn variable is not defined here!');
     }
-    addBookFormContainer.classList.add('visible');
-    /* // Remove the focus call to see if it prevents field clearing
-        if (!skipReset) { // Focus logic only runs for non-prefill/non-edit
-            const firstInput = addBookForm?.querySelector('#title');
-            if (firstInput) firstInput.focus();
-        }
-        */
-    
+    showModal(addBookFormContainer);
 }
-function hideAddBookModal() { if (addBookFormContainer) { addBookFormContainer.classList.remove('visible'); currentlyEditingBookId = null; } } // Clear edit ID on hide
+
+function hideAddBookModal() { 
+    if (addBookFormContainer) { 
+        hideModal(addBookFormContainer);
+        
+        // Return to previous state
+        if (addBookCancelled) {
+            // If cancelling an add-to-bookshelf, revert the book's status
+            if (currentlyEditingBookId) {
+                const book = allBooks.find(b => b.id === currentlyEditingBookId);
+                if (book && book._originalStatus) {
+                    book.status = book._originalStatus;
+                    delete book._originalStatus;
+                }
+            }
+            // If cancelled, go back to previous view
+            if (previousViewBeforeAdd === 'wishlist') {
+                isWishlistViewActive = true;
+            } else {
+                isWishlistViewActive = false;
+            }
+        } else {
+            // If not cancelled, clean up any temp status
+            if (currentlyEditingBookId) {
+                const book = allBooks.find(b => b.id === currentlyEditingBookId);
+                if (book && book._originalStatus) {
+                    delete book._originalStatus;
+                }
+            }
+        }
+        
+        // Reset flags
+        isAddingBook = false;
+        currentlyEditingBookId = null;
+        
+        // Update button highlights directly
+        const homeBtn = document.getElementById('home-nav-btn');
+        const wishlistBtn = document.getElementById('wishlist-nav-btn');
+        const searchBtn = document.getElementById('search-nav-btn');
+        const filterBtn = document.getElementById('filter-nav-btn');
+        
+        // Clear all highlights first
+        if (homeBtn) homeBtn.classList.remove('active');
+        if (wishlistBtn) wishlistBtn.classList.remove('active');
+        if (searchBtn) searchBtn.classList.remove('active');
+        
+        // Set the correct view button
+        if (isSearchActive && searchBtn) {
+            searchBtn.classList.add('active');
+        } else if (isWishlistViewActive && wishlistBtn) {
+            wishlistBtn.classList.add('active');
+        } else if (homeBtn) {
+            homeBtn.classList.add('active');
+        }
+        
+        // Also highlight filter button if filters are active
+        if (isFilterActive && filterBtn) {
+            filterBtn.classList.add('active');
+        }
+        
+        renderBooks();
+    } 
+}
 
 function showBookDetailModal(bookId) {
     const book = allBooks.find(b => b.id === bookId);
@@ -674,9 +866,15 @@ function showBookDetailModal(bookId) {
     // Show/Hide Edit button based on status? Edit button should probably always show.
     if (editBookBtn) editBookBtn.style.display = 'inline-block';
 
-    bookDetailModal.classList.add('visible');
+    showModal(bookDetailModal);
 }
-function hideBookDetailModal() { if (bookDetailModal) { bookDetailModal.classList.remove('visible'); detailModalBookId = null; } }
+
+function hideBookDetailModal() { 
+    if (bookDetailModal) { 
+        hideModal(bookDetailModal);
+        detailModalBookId = null; 
+    } 
+}
 
 function openRatingModal(bookId, isInitial) {
     if (!ratingModal) { console.error("Rating modal element not found!"); return; }
@@ -696,7 +894,7 @@ function openRatingModal(bookId, isInitial) {
     currentRatingValue = initialRatingValue;
     currentReviewValue = initialReviewValue;
 
-    // console.log(`Opening rating modal for ${book.title}. Initial rating: ${initialRatingValue}, Initial review: '${initialReviewValue}'`);
+    console.log(`Opening rating modal for ${book.title}. Initial rating: ${initialRatingValue}`);
 
     if (ratingModalTitle) ratingModalTitle.textContent = `Rate/Review: ${book.title}`;
 
@@ -718,19 +916,56 @@ function openRatingModal(bookId, isInitial) {
         editReviewBtn.style.display = 'inline-block';
     }
 
+    // Setup interactive stars event listeners
+    if (interactiveStarsContainer) {
+        // Remove any existing event listeners to prevent duplicates
+        interactiveStarsContainer.removeEventListener('mousedown', handleStarInteractionStart);
+        interactiveStarsContainer.removeEventListener('touchstart', handleStarInteractionStart);
+        interactiveStarsContainer.removeEventListener('mousemove', handleStarInteractionMove);
+        interactiveStarsContainer.removeEventListener('touchmove', handleStarInteractionMove);
+        document.removeEventListener('mouseup', handleStarInteractionEnd);
+        document.removeEventListener('touchend', handleStarInteractionEnd);
+        
+        // Add event listeners for mouse and touch interactions
+        interactiveStarsContainer.addEventListener('mousedown', handleStarInteractionStart);
+        interactiveStarsContainer.addEventListener('touchstart', handleStarInteractionStart);
+        interactiveStarsContainer.addEventListener('mousemove', handleStarInteractionMove);
+        interactiveStarsContainer.addEventListener('touchmove', handleStarInteractionMove);
+        document.addEventListener('mouseup', handleStarInteractionEnd);
+        document.addEventListener('touchend', handleStarInteractionEnd);
+        
+        console.log("Rating stars event listeners attached");
+    } else {
+        console.error("Interactive stars container not found!");
+    }
+
     updateRatingModalButtons();
-    ratingModal.classList.add('visible');
+    showModal(ratingModal);
 }
 
 function closeRatingModal() {
-    if (ratingModal) { ratingModal.classList.remove('visible'); }
-    currentRatingBookId = null;
+    if (ratingModal) {
+        hideModal(ratingModal);
+        currentRatingBookId = null;
+    }
     if (reviewDisplayArea) reviewDisplayArea.style.display = 'block';
     if (editReviewBtn) editReviewBtn.style.display = 'inline-block';
     if (reviewInput) {
         reviewInput.style.display = 'none';
         reviewInput.readOnly = true;
     }
+    
+    // Clean up event listeners
+    if (interactiveStarsContainer) {
+        interactiveStarsContainer.removeEventListener('mousedown', handleStarInteractionStart);
+        interactiveStarsContainer.removeEventListener('touchstart', handleStarInteractionStart);
+        interactiveStarsContainer.removeEventListener('mousemove', handleStarInteractionMove);
+        interactiveStarsContainer.removeEventListener('touchmove', handleStarInteractionMove);
+        document.removeEventListener('mouseup', handleStarInteractionEnd);
+        document.removeEventListener('touchend', handleStarInteractionEnd);
+        console.log("Rating stars event listeners removed");
+    }
+    
     isRatingInteractionActive = false;
 }
 
@@ -821,19 +1056,30 @@ function calculateRatingFromEvent(event) {
 }
 
 function handleStarInteractionStart(event) {
+    console.log("Star interaction started");
     isRatingInteractionActive = true;
     const newRating = calculateRatingFromEvent(event);
-    if (typeof newRating === 'number') { updateInteractiveStarsVisual(newRating); }
+    console.log(`Initial rating calculation: ${newRating}`);
+    if (typeof newRating === 'number') { 
+        updateInteractiveStarsVisual(newRating);
+    }
 }
+
 function handleStarInteractionMove(event) {
     if (!isRatingInteractionActive) return;
     const newRating = calculateRatingFromEvent(event);
-     if (typeof newRating === 'number') { updateInteractiveStarsVisual(newRating); }
+    console.log(`Move rating calculation: ${newRating}`);
+    if (typeof newRating === 'number') { 
+        updateInteractiveStarsVisual(newRating);
+    }
 }
+
 function handleStarInteractionEnd(event) {
     if (!isRatingInteractionActive) return;
+    console.log("Star interaction ended");
     isRatingInteractionActive = false;
     const finalRating = calculateRatingFromEvent(event);
+    console.log(`Final rating: ${finalRating}`);
     if (typeof finalRating === 'number') {
         currentRatingValue = finalRating;
         updateInteractiveStarsVisual(currentRatingValue);
@@ -847,13 +1093,23 @@ function handleStarInteractionEnd(event) {
 // --- Search Functions ---
 function showSearchModal() {
     if (searchModal) {
-        if (searchInput) searchInput.value = '';
-        if (searchStatusElement) searchStatusElement.textContent = '';
-        searchModal.classList.add('visible');
-        if (searchInput) searchInput.focus();
+        showModal(searchModal);
+        if (searchInput) {
+            searchInput.value = currentSearchTerm || '';
+            searchInput.focus();
+        }
+        if (searchStatusElement) {
+            searchStatusElement.textContent = '';
+        }
     }
 }
-function hideSearchModal() { if (searchModal) { searchModal.classList.remove('visible'); } }
+
+function hideSearchModal() { 
+    if (searchModal) { 
+        hideModal(searchModal);
+    } 
+}
+
 function performSearch() {
     if (!searchInput) return;
     const searchTerm = searchInput.value.trim();
@@ -862,19 +1118,97 @@ function performSearch() {
         searchInput.focus();
         return;
     }
-    // console.log(`Performing search for: \"${searchTerm}\"`);
+    console.log(`Performing search for: \"${searchTerm}\"`);
     currentSearchTerm = searchTerm;
     isSearchActive = true;
-    if (searchBtn) searchBtn.textContent = 'Clear Search';
+    
+    // Update search button appearance directly without calling updateSearchButtonAppearance
+    const searchBtn = document.getElementById('search-nav-btn');
+    if (searchBtn) {
+        // Update button content
+        searchBtn.innerHTML = '<span class="material-symbols-outlined">close</span><span>Clear Search</span>';
+        
+        // Highlight the search button
+        searchBtn.classList.add('active');
+        
+        // Remove active class from home and wishlist buttons
+        const homeBtn = document.getElementById('home-nav-btn');
+        const wishlistBtn = document.getElementById('wishlist-nav-btn');
+        if (homeBtn) homeBtn.classList.remove('active');
+        if (wishlistBtn) wishlistBtn.classList.remove('active');
+        
+        // Fix the styles directly
+        const icon = searchBtn.querySelector('.material-symbols-outlined');
+        const text = searchBtn.querySelector('span:not(.material-symbols-outlined)');
+        
+        if (icon) {
+            icon.style.cssText = `
+                display: block !important; 
+                visibility: visible !important; 
+                opacity: 1 !important; 
+                font-size: 1.5rem !important; 
+                margin-bottom: 0.3rem !important;
+                position: relative !important;
+                z-index: 5 !important;
+            `;
+        }
+        
+        if (text) {
+            text.style.cssText = `
+                display: block !important; 
+                visibility: visible !important; 
+                opacity: 1 !important; 
+                font-size: 0.7rem !important;
+                position: relative !important;
+                z-index: 5 !important;
+            `;
+        }
+    }
+    
     renderBooks();
     hideSearchModal();
 }
+
 function clearSearch() {
-    // console.log("Clearing search.");
+    console.log("Clearing search");
     currentSearchTerm = '';
     isSearchActive = false;
     if (searchInput) searchInput.value = '';
-    if (searchBtn) searchBtn.textContent = 'Search';
+    
+    // Update search button appearance directly without calling updateSearchButtonAppearance
+    const searchBtn = document.getElementById('search-nav-btn');
+    if (searchBtn) {
+        searchBtn.innerHTML = '<span class="material-symbols-outlined">search</span><span>Search</span>';
+        
+        // Fix the styles directly
+        const icon = searchBtn.querySelector('.material-symbols-outlined');
+        const text = searchBtn.querySelector('span:not(.material-symbols-outlined)');
+        
+        if (icon) {
+            icon.style.cssText = `
+                display: block !important; 
+                visibility: visible !important; 
+                opacity: 1 !important; 
+                font-size: 1.5rem !important; 
+                margin-bottom: 0.3rem !important;
+                position: relative !important;
+                z-index: 5 !important;
+            `;
+        }
+        
+        if (text) {
+            text.style.cssText = `
+                display: block !important; 
+                visibility: visible !important; 
+                opacity: 1 !important; 
+                font-size: 0.7rem !important;
+                position: relative !important;
+                z-index: 5 !important;
+            `;
+        }
+    }
+    
+    // Don't call setActiveNavButtons here - this should be called by the function that called clearSearch
     renderBooks();
 }
 
@@ -1093,10 +1427,10 @@ function prefillAndShowAddBookForm(apiData) {
     // Try to auto-detect series info from title (if not provided by API)
     if (!apiData.apiSeriesTitle) {
         const detectedSeries = detectSeriesInfoFromTitle(apiData.title);
-        if (detectedSeries.title) {
-            setVal('#userSeriesTitle', detectedSeries.title);
-            if (detectedSeries.number) {
-                setVal('#userSeriesNumber', detectedSeries.number);
+        if (detectedSeries.seriesTitle) {
+            setVal('#userSeriesTitle', detectedSeries.seriesTitle);
+            if (detectedSeries.seriesNumber) {
+                setVal('#userSeriesNumber', detectedSeries.seriesNumber);
             }
         }
     } else {
@@ -1335,8 +1669,33 @@ function handleAddBookSubmit(event) {
     
     // Update storage with new/edited book
     saveBooksToStorage(allBooks);
+
+    // Update known series titles if a new one was added
+    if (saveData.userSeriesTitle && saveData.userSeriesTitle.trim()) {
+        const currentSeriesTitles = loadSeriesTitles();
+        if (!currentSeriesTitles.includes(saveData.userSeriesTitle.trim())) {
+            saveSeriesTitles([...currentSeriesTitles, saveData.userSeriesTitle.trim()]);
+        }
+    }
     
-    // Reset form and state
+    // Set view based on the book's status
+    if (status === 'Wishlist') {
+        isWishlistViewActive = true;
+    } else {
+        isWishlistViewActive = false;
+    }
+    
+    // Clear search and filters when a book is added
+    if (isSearchActive) {
+        clearSearch();
+    }
+    if (isFilterActive) {
+        clearFilters();
+    }
+    
+    // Reset flags
+    addBookCancelled = false;
+    isAddingBook = false;
     currentlyEditingBookId = null;
     currentlyFetchedApiData = null; 
     selectedCoverImageDataUrl = null;
@@ -1345,7 +1704,7 @@ function handleAddBookSubmit(event) {
     // Hide the form modal
     hideAddBookModal();
     
-    // Re-render the book display
+    // Re-render the book display - setActiveNavButtons is called by hideAddBookModal
     renderBooks();
 }
 
@@ -1395,11 +1754,13 @@ function showFilterModal() {
         filterSortSelect.value = `${currentSort.field}_${currentSort.direction}`;
     }
 
-    filterModal.classList.add('visible');
+    showModal(filterModal);
 }
 
-function hideFilterModal() {
-    if (filterModal) filterModal.classList.remove('visible');
+function hideFilterModal() { 
+    if (filterModal) { 
+        hideModal(filterModal);
+    } 
 }
 
 function handleApplyFilters() {
@@ -1435,6 +1796,12 @@ function handleApplyFilters() {
                      activeFilters.reader.length > 0 ||
                      activeFilters.targetRating !== 0;
 
+    // Update the filter button highlight directly
+    const filterBtn = document.getElementById('filter-nav-btn');
+    if (filterBtn && isFilterActive) {
+        filterBtn.classList.add('active');
+    }
+    
     renderBooks(); // Re-render with new filters
     hideFilterModal();
 }
@@ -1451,16 +1818,7 @@ function handleClearFilters() {
         if (anyRatingOption) anyRatingOption.checked = true;
     }
     
-    // Reset filter state
-    activeFilters = {
-        status: [],
-        reader: [],
-        targetRating: 0
-    };
-    isFilterActive = false;
-    
-    // Rerender books with cleared filters
-    renderBooks();
+    clearFilters();
     
     // Hide filter modal
     hideFilterModal();
@@ -1471,7 +1829,7 @@ function handleSortChange(event) {
     const selectedOption = event.target.value;
     const [field, direction] = selectedOption.split('_');
     console.log(`Sorting by ${field} in ${direction} order`);
-    currentSort = { field, direction };
+        currentSort = { field, direction };
     renderBooks();
 }
 
@@ -1495,16 +1853,14 @@ function setView(viewType) {
 
 // Settings modal functions
 function showSettingsModal() {
-    const settingsModal = document.getElementById('settings-modal');
     if (settingsModal) {
-        settingsModal.classList.add('visible');
+        showModal(settingsModal);
     }
 }
 
 function hideSettingsModal() {
-    const settingsModal = document.getElementById('settings-modal');
     if (settingsModal) {
-        settingsModal.classList.remove('visible');
+        hideModal(settingsModal);
     }
 }
 
@@ -1727,13 +2083,13 @@ document.addEventListener('DOMContentLoaded', function() {
     updateDarkModeUI();
     
     // --- UI Elements (Assignment) ---
-    bookDisplayArea = document.getElementById('book-display-area');
+        bookDisplayArea = document.getElementById('book-display-area');
     
     // Initialize all UI element references
-    isbnInputContainer = document.getElementById('isbn-input-container');
-    isbnManualInput = document.getElementById('isbn-manual-input');
-    isbnLookupButton = document.getElementById('isbn-lookup-btn');
-    cancelIsbnInputButton = document.getElementById('cancel-isbn-input-btn');
+        isbnInputContainer = document.getElementById('isbn-input-container');
+        isbnManualInput = document.getElementById('isbn-manual-input');
+        isbnLookupButton = document.getElementById('isbn-lookup-btn');
+        cancelIsbnInputButton = document.getElementById('cancel-isbn-input-btn');
     lookupStatusElement = document.getElementById('isbn-lookup-status');
     seriesTitlesDatalist = document.getElementById('series-titles-list');
     addBookFormContainer = document.getElementById('add-book-form-container');
@@ -1741,11 +2097,11 @@ document.addEventListener('DOMContentLoaded', function() {
     cancelAddBookButton = document.getElementById('cancel-add-book-btn');
     addBookFormTitle = document.getElementById('add-book-form-title');
     resetDataButton = document.getElementById('reset-data-btn');
-    searchModal = document.getElementById('search-modal');
-    searchInput = document.getElementById('search-input');
-    searchSubmitBtn = document.getElementById('search-submit-btn');
-    searchCancelBtn = document.getElementById('search-cancel-btn');
-    searchStatusElement = document.getElementById('search-status');
+        searchModal = document.getElementById('search-modal');
+        searchInput = document.getElementById('search-input');
+        searchSubmitBtn = document.getElementById('search-submit-btn');
+        searchCancelBtn = document.getElementById('search-cancel-btn');
+        searchStatusElement = document.getElementById('search-status');
     filterModal = document.getElementById('filter-modal');
     filterForm = document.getElementById('filter-form');
     filterApplyBtn = document.getElementById('filter-apply-btn');
@@ -1753,25 +2109,25 @@ document.addEventListener('DOMContentLoaded', function() {
     filterCancelBtn = document.getElementById('filter-cancel-btn');
     
     // Book Detail Modal Elements
-    bookDetailModal = document.getElementById('book-detail-modal');
-    detailCover = document.getElementById('detail-cover');
-    detailTitle = document.getElementById('detail-title');
-    detailAuthor = document.getElementById('detail-author');
-    detailSeries = document.getElementById('detail-series');
-    detailRating = document.getElementById('detail-rating');
-    detailStatus = document.getElementById('detail-status');
-    detailReader = document.getElementById('detail-reader');
-    detailDateAdded = document.getElementById('detail-date-added');
-    detailDateFinished = document.getElementById('detail-date-finished');
-    detailGenres = document.getElementById('detail-genres');
-    detailTags = document.getElementById('detail-tags');
-    detailSynopsis = document.getElementById('detail-synopsis');
-    detailPageCount = document.getElementById('detail-page-count');
-    detailPublisher = document.getElementById('detail-publisher');
-    detailPublicationYear = document.getElementById('detail-publication-year');
-    detailIsbn = document.getElementById('detail-isbn');
-    editBookBtn = document.getElementById('edit-book-btn');
-    closeDetailBtn = document.getElementById('close-detail-btn');
+        bookDetailModal = document.getElementById('book-detail-modal');
+        detailCover = document.getElementById('detail-cover');
+        detailTitle = document.getElementById('detail-title');
+        detailAuthor = document.getElementById('detail-author');
+        detailSeries = document.getElementById('detail-series');
+        detailRating = document.getElementById('detail-rating');
+        detailStatus = document.getElementById('detail-status');
+        detailReader = document.getElementById('detail-reader');
+        detailDateAdded = document.getElementById('detail-date-added');
+        detailDateFinished = document.getElementById('detail-date-finished');
+        detailGenres = document.getElementById('detail-genres');
+        detailTags = document.getElementById('detail-tags');
+        detailSynopsis = document.getElementById('detail-synopsis');
+        detailPageCount = document.getElementById('detail-page-count');
+        detailPublisher = document.getElementById('detail-publisher');
+        detailPublicationYear = document.getElementById('detail-publication-year');
+        detailIsbn = document.getElementById('detail-isbn');
+        editBookBtn = document.getElementById('edit-book-btn');
+        closeDetailBtn = document.getElementById('close-detail-btn');
     deleteBookBtn = document.getElementById('delete-book-btn');
     synopsisDisplayText = document.getElementById('synopsis-display-text');
     editSynopsisBtn = document.getElementById('edit-synopsis-btn');
@@ -1780,18 +2136,18 @@ document.addEventListener('DOMContentLoaded', function() {
     detailReviewText = document.getElementById('detail-review-text');
     
     // Rating Modal Elements
-    ratingModal = document.getElementById('rating-review-modal');
-    ratingModalTitle = document.getElementById('rating-modal-title');
-    interactiveStarsContainer = document.getElementById('interactive-stars');
-    ratingValueDisplay = document.getElementById('rating-value-display');
-    reviewSection = document.getElementById('review-section');
-    reviewDisplayArea = document.getElementById('review-display-area');
-    reviewDisplayText = document.getElementById('review-display-text');
-    editReviewBtn = document.getElementById('edit-review-btn');
-    reviewInput = document.getElementById('review-input');
-    ratingCancelBtn = document.getElementById('rating-cancel-btn');
-    ratingSaveBtn = document.getElementById('rating-save-btn');
-    ratingCloseBtn = document.getElementById('rating-close-btn');
+        ratingModal = document.getElementById('rating-review-modal');
+        ratingModalTitle = document.getElementById('rating-modal-title');
+        interactiveStarsContainer = document.getElementById('interactive-stars');
+        ratingValueDisplay = document.getElementById('rating-value-display');
+        reviewSection = document.getElementById('review-section');
+        reviewDisplayArea = document.getElementById('review-display-area');
+        reviewDisplayText = document.getElementById('review-display-text');
+        editReviewBtn = document.getElementById('edit-review-btn');
+        reviewInput = document.getElementById('review-input');
+        ratingCancelBtn = document.getElementById('rating-cancel-btn');
+        ratingSaveBtn = document.getElementById('rating-save-btn');
+        ratingCloseBtn = document.getElementById('rating-close-btn');
     
     // Add Book Form Elements
     formCoverPreview = document.getElementById('form-cover-preview');
@@ -1799,7 +2155,7 @@ document.addEventListener('DOMContentLoaded', function() {
     formApiGenres = document.getElementById('api-genres-input');
     saveBookBtn = document.getElementById('save-book-btn');
     removeCustomCoverBtn = document.getElementById('remove-custom-cover-btn');
-    addManuallyBtn = document.getElementById('add-manually-btn');
+        addManuallyBtn = document.getElementById('add-manually-btn');
     
     // Bottom Navigation Bar Elements
     const homeNavBtn = document.getElementById('home-nav-btn');
@@ -1813,13 +2169,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Settings Modal Elements
     const settingsBtn = document.getElementById('settings-btn');
-    const settingsModal = document.getElementById('settings-modal');
+    settingsModal = document.getElementById('settings-modal');
     const settingsCloseBtn = document.getElementById('settings-close-btn');
     exportBtn = document.getElementById('export-btn');
     const importBtn = document.getElementById('import-btn');
     const importFileInput = document.getElementById('import-file-input');
 
-    // --- Event Listeners ---
+        // --- Event Listeners ---
     
     // View buttons
     const gridViewBtn = document.getElementById('grid-view-btn');
@@ -1858,8 +2214,15 @@ document.addEventListener('DOMContentLoaded', function() {
     if (resetDataButton) resetDataButton.addEventListener('click', resetAllData);
     
     // Search modal
-    if (searchSubmitBtn) searchSubmitBtn.addEventListener('click', performSearch);
-    if (searchCancelBtn) searchCancelBtn.addEventListener('click', hideSearchModal);
+        if (searchSubmitBtn) searchSubmitBtn.addEventListener('click', performSearch);
+        if (searchCancelBtn) {
+            searchCancelBtn.addEventListener('click', function() {
+                console.log("Search cancelled");
+                hideSearchModal();
+                // Don't change any state - just return to previous view
+                // The active buttons should already be set correctly
+            });
+        }
     
     // Filter functionality
     if (filterApplyBtn) filterApplyBtn.addEventListener('click', handleApplyFilters);
@@ -1868,36 +2231,71 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // ISBN input modal
     if (isbnLookupButton) isbnLookupButton.addEventListener('click', handleIsbnLookup);
-    if (cancelIsbnInputButton) cancelIsbnInputButton.addEventListener('click', hideIsbnInputModal);
-    if (addManuallyBtn) addManuallyBtn.addEventListener('click', () => {
+    if (cancelIsbnInputButton) {
+        cancelIsbnInputButton.addEventListener('click', function() {
+            console.log("Cancel ISBN lookup clicked");
+            addBookCancelled = true;
+            hideIsbnInputModal();
+            
+            // Reset flags
+            isAddingBook = false;
+            
+            // Update button highlights directly based on current view
+            const homeBtn = document.getElementById('home-nav-btn');
+            const wishlistBtn = document.getElementById('wishlist-nav-btn');
+            const searchBtn = document.getElementById('search-nav-btn');
+            const filterBtn = document.getElementById('filter-nav-btn');
+            
+            // Clear all highlights first
+            if (homeBtn) homeBtn.classList.remove('active');
+            if (wishlistBtn) wishlistBtn.classList.remove('active');
+            if (searchBtn) searchBtn.classList.remove('active');
+            
+            // Set the correct view button
+            if (isSearchActive && searchBtn) {
+                searchBtn.classList.add('active');
+            } else if (isWishlistViewActive && wishlistBtn) {
+                wishlistBtn.classList.add('active');
+            } else if (homeBtn) {
+                homeBtn.classList.add('active');
+            }
+            
+            // Also highlight filter button if filters are active
+            if (isFilterActive && filterBtn) {
+                filterBtn.classList.add('active');
+            }
+        });
+    }
+    if (addManuallyBtn) addManuallyBtn.addEventListener('click', function() {
+        console.log("Add manually clicked");
         hideIsbnInputModal();
         showAddBookModal(false);
     });
     
     // Add book form
-    if (addBookForm) {
-        addBookForm.addEventListener('submit', handleAddBookSubmit);
+        if (addBookForm) {
+            addBookForm.addEventListener('submit', handleAddBookSubmit);
         
         // Make sure clicking the save button triggers form submission
-        if (saveBookBtn) {
+            if (saveBookBtn) {
             saveBookBtn.addEventListener('click', function() {
                 console.log("Save button clicked");
                 // Check form validity before submitting
                 if (addBookForm.checkValidity()) {
                     handleAddBookSubmit(new Event('submit'));
-                } else {
+                            } else {
                     addBookForm.reportValidity();
-                }
-            });
-        }
+                    }
+                });
+            }
     }
     
-    if (cancelAddBookButton) cancelAddBookButton.addEventListener('click', hideAddBookModal);
-    
+        if (cancelAddBookButton) cancelAddBookButton.addEventListener('click', hideAddBookModal);
+
     // Book detail modal
     if (closeDetailBtn) closeDetailBtn.addEventListener('click', hideBookDetailModal);
-    if (editBookBtn) {
-        editBookBtn.addEventListener('click', () => {
+        if (editBookBtn) {
+            editBookBtn.addEventListener('click', () => {
             if (detailModalBookId) {
                 startEditBook(detailModalBookId);
             }
@@ -1912,29 +2310,48 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Rating modal
-    if (ratingCancelBtn) ratingCancelBtn.addEventListener('click', handleRatingCancel);
-    if (ratingCloseBtn) ratingCloseBtn.addEventListener('click', closeRatingModal);
-    if (ratingSaveBtn) ratingSaveBtn.addEventListener('click', handleRatingSave);
-    if (editReviewBtn) editReviewBtn.addEventListener('click', handleEditReviewClick);
-    if (reviewInput) reviewInput.addEventListener('input', updateRatingModalButtons);
+        if (ratingCancelBtn) ratingCancelBtn.addEventListener('click', handleRatingCancel);
+        if (ratingCloseBtn) ratingCloseBtn.addEventListener('click', closeRatingModal);
+        if (ratingSaveBtn) ratingSaveBtn.addEventListener('click', handleRatingSave);
+        if (editReviewBtn) editReviewBtn.addEventListener('click', handleEditReviewClick);
+        if (reviewInput) reviewInput.addEventListener('input', updateRatingModalButtons);
     
-    // Function to set active bottom nav button
-    function setActiveNavButton(buttonId) {
+    // Function to set active bottom nav button(s)
+    function setActiveNavButtons() {
         // Remove active class from all buttons
         document.querySelectorAll('.bottom-nav-button').forEach(btn => {
             btn.classList.remove('active');
         });
-        // Add active class to the clicked button
-        document.getElementById(buttonId).classList.add('active');
+        
+        // Highlight the appropriate view button
+        if (isSearchActive) {
+            const searchBtn = document.getElementById('search-nav-btn');
+            if (searchBtn) searchBtn.classList.add('active');
+        } else if (isWishlistViewActive) {
+            const wishlistBtn = document.getElementById('wishlist-nav-btn');
+            if (wishlistBtn) wishlistBtn.classList.add('active');
+        } else {
+            const homeBtn = document.getElementById('home-nav-btn');
+            if (homeBtn) homeBtn.classList.add('active');
+        }
+        
+        // If filters are active, also highlight the filter button
+        if (isFilterActive) {
+            const filterBtn = document.getElementById('filter-nav-btn');
+            if (filterBtn) filterBtn.classList.add('active');
+        }
     }
     
     // Bottom Nav Event Listeners
     if (homeNavBtn) {
         homeNavBtn.onclick = function() {
             console.log("Home button clicked");
-            setActiveNavButton('home-nav-btn');
-            clearSearch();
+            // Clear search if active
+            if (isSearchActive) {
+                clearSearch();
+            }
             isWishlistViewActive = false;
+            setActiveNavButtons();
             renderBooks();
             return false; // Prevent default
         };
@@ -1943,7 +2360,13 @@ document.addEventListener('DOMContentLoaded', function() {
     if (addNavBtn) {
         addNavBtn.onclick = function() {
             console.log("Add button clicked");
-            setActiveNavButton('add-nav-btn');
+            
+            // Store current view state to return to
+            previousViewBeforeAdd = isWishlistViewActive ? 'wishlist' : 'library';
+            isAddingBook = true;
+            addBookCancelled = false;
+            
+            // Don't change the active buttons yet - this happens after add completes or cancels
             showIsbnInputModal();
             return false; // Prevent default
         };
@@ -1952,8 +2375,15 @@ document.addEventListener('DOMContentLoaded', function() {
     if (searchNavBtn) {
         searchNavBtn.onclick = function() {
             console.log("Search button clicked");
-            setActiveNavButton('search-nav-btn');
-            showSearchModal();
+            
+            // If search is active, clear it
+            if (isSearchActive) {
+                clearSearch();
+                setActiveNavButtons();
+            } else {
+                // Show search modal
+                showSearchModal();
+            }
             return false; // Prevent default
         };
     }
@@ -1961,8 +2391,12 @@ document.addEventListener('DOMContentLoaded', function() {
     if (wishlistNavBtn) {
         wishlistNavBtn.onclick = function() {
             console.log("Wishlist button clicked");
-            setActiveNavButton('wishlist-nav-btn');
+            // Clear search if active
+            if (isSearchActive) {
+                clearSearch();
+            }
             isWishlistViewActive = true;
+            setActiveNavButtons();
             renderBooks();
             return false; // Prevent default
         };
@@ -1971,7 +2405,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (filterNavBtn) {
         filterNavBtn.onclick = function() {
             console.log("Filter button clicked");
-            setActiveNavButton('filter-nav-btn');
+            // Don't clear search - filters work with search results too
             showFilterModal();
             return false; // Prevent default
         };
@@ -1981,28 +2415,99 @@ document.addEventListener('DOMContentLoaded', function() {
     function fixNavigationButtons() {
         const navButtons = document.querySelectorAll('.bottom-nav-button');
         navButtons.forEach(btn => {
+            // For the search button, use direct manipulation
+            if (btn.id === 'search-nav-btn') {
+                // Keep the button's structure intact
+                btn.style.cssText = `
+                    height: auto !important;
+                    display: flex !important;
+                    flex-direction: column !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    pointer-events: auto !important;
+                    cursor: pointer !important;
+                    visibility: visible !important;
+                    opacity: 1 !important;
+                `;
+                
+                // Only update the contents if search is not active
+                if (!isSearchActive) {
+                    // Make sure we're not changing active search status layout
+                    if (!btn.innerHTML.includes("Clear Search")) {
+                        btn.innerHTML = '<span class="material-symbols-outlined">search</span><span>Search</span>';
+                    }
+                }
+                
+                // Style the contents properly
+                const icon = btn.querySelector('.material-symbols-outlined');
+                const text = btn.querySelector('span:not(.material-symbols-outlined)');
+                
+                if (icon) {
+                    icon.style.cssText = `
+                        display: block !important; 
+                        visibility: visible !important; 
+                        opacity: 1 !important; 
+                        font-size: 1.5rem !important; 
+                        margin-bottom: 0.3rem !important;
+                        position: relative !important;
+                        z-index: 5 !important;
+                    `;
+                }
+                
+                if (text) {
+                    text.style.cssText = `
+                        display: block !important; 
+                        visibility: visible !important; 
+                        opacity: 1 !important; 
+                        font-size: 0.7rem !important;
+                        position: relative !important;
+                        z-index: 5 !important;
+                    `;
+                }
+                
+                return;
+            }
+            
             const icon = btn.querySelector('.material-symbols-outlined');
             const text = btn.querySelector('span:not(.material-symbols-outlined)');
             
             // Reset any inline styles on the button itself
-            btn.style.height = '';
-            btn.style.display = 'flex';
-            btn.style.flexDirection = 'column';
-            btn.style.alignItems = 'center';
-            btn.style.justifyContent = 'center';
-            btn.style.pointerEvents = 'auto';
-            btn.style.cursor = 'pointer';
+            btn.style.cssText = `
+                height: auto !important;
+                display: flex !important;
+                flex-direction: column !important;
+                align-items: center !important;
+                justify-content: center !important;
+                pointer-events: auto !important;
+                cursor: pointer !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+            `;
             
             if (icon) {
                 // Force icon visibility with !important (via JS)
-                icon.style.cssText = 'display: block !important; visibility: visible !important; opacity: 1 !important; font-size: 1.5rem !important; margin-bottom: 0.3rem !important;';
+                icon.style.cssText = `
+                    display: block !important; 
+                    visibility: visible !important; 
+                    opacity: 1 !important; 
+                    font-size: 1.5rem !important; 
+                    margin-bottom: 0.3rem !important;
+                    position: relative !important;
+                    z-index: 5 !important;
+                `;
                 icon.classList.remove('hidden');
                 
                 // Ensure parent elements don't hide the icon
                 let parent = icon.parentElement;
                 while (parent && parent !== document.body) {
-                    if (getComputedStyle(parent).display === 'none') {
-                        parent.style.display = 'block';
+                    if (window.getComputedStyle(parent).display === 'none') {
+                        parent.style.display = 'block !important';
+                    }
+                    if (window.getComputedStyle(parent).visibility === 'hidden') {
+                        parent.style.visibility = 'visible !important';
+                    }
+                    if (window.getComputedStyle(parent).opacity === '0') {
+                        parent.style.opacity = '1 !important';
                     }
                     parent = parent.parentElement;
                 }
@@ -2010,24 +2515,25 @@ document.addEventListener('DOMContentLoaded', function() {
             
             if (text) {
                 // Force text visibility with !important (via JS)
-                text.style.cssText = 'display: block !important; visibility: visible !important; opacity: 1 !important; font-size: 0.7rem !important;';
+                text.style.cssText = `
+                    display: block !important; 
+                    visibility: visible !important; 
+                    opacity: 1 !important; 
+                    font-size: 0.7rem !important;
+                    position: relative !important;
+                    z-index: 5 !important;
+                `;
                 text.classList.remove('hidden');
             }
-            
-            // Remove console logging to prevent flooding
-            // console.log(`Fixed navigation button: ${btn.id}, Icon: ${icon ? 'present' : 'missing'}, Text: ${text ? 'present' : 'missing'}`);
         });
     }
-    
-    // Fix navigation buttons initially
-    fixNavigationButtons();
     
     // Run fix when nav buttons are clicked
     // Using the new onclick handlers instead of addEventListener
     if (homeNavBtn) {
         const oldHomeClick = homeNavBtn.onclick;
         homeNavBtn.onclick = function() {
-            fixNavigationButtons();
+            setTimeout(fixNavigationButtons, 50);
             return oldHomeClick ? oldHomeClick.apply(this, arguments) : true;
         };
     }
@@ -2035,7 +2541,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (addNavBtn) {
         const oldAddClick = addNavBtn.onclick;
         addNavBtn.onclick = function() {
-            fixNavigationButtons();
+            setTimeout(fixNavigationButtons, 50);
             return oldAddClick ? oldAddClick.apply(this, arguments) : true;
         };
     }
@@ -2043,7 +2549,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (wishlistNavBtn) {
         const oldWishlistClick = wishlistNavBtn.onclick;
         wishlistNavBtn.onclick = function() {
-            fixNavigationButtons();
+            setTimeout(fixNavigationButtons, 50);
             return oldWishlistClick ? oldWishlistClick.apply(this, arguments) : true;
         };
     }
@@ -2051,7 +2557,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (filterNavBtn) {
         const oldFilterClick = filterNavBtn.onclick;
         filterNavBtn.onclick = function() {
-            fixNavigationButtons();
+            setTimeout(fixNavigationButtons, 50);
             return oldFilterClick ? oldFilterClick.apply(this, arguments) : true;
         };
     }
@@ -2059,12 +2565,12 @@ document.addEventListener('DOMContentLoaded', function() {
     if (searchNavBtn) {
         const oldSearchClick = searchNavBtn.onclick;
         searchNavBtn.onclick = function() {
-            fixNavigationButtons();
+            setTimeout(fixNavigationButtons, 50);
             return oldSearchClick ? oldSearchClick.apply(this, arguments) : true;
         };
     }
     
-    // Run fix periodically with reduced frequency to avoid constant console output
+    // Run fix periodically with reduced frequency
     setInterval(fixNavigationButtons, 2000);
 
     // --- Book Data Loading & Initial Render ---
