@@ -2258,4 +2258,35 @@ button > span.material-symbols-outlined:only-child {
   color: #1C1C1E !important;
 }
 
+/* Dark mode filter modal: force light background and dark text for contrast */
+.dark-mode #filter-modal .modal-content {
+  background: #fff !important;
+}
+.dark-mode #filter-modal .modal-content > h2,
+.dark-mode #filter-modal .modal-content label,
+.dark-mode #filter-modal .modal-content legend,
+.dark-mode #filter-modal .modal-content input,
+.dark-mode #filter-modal .modal-content select {
+  color: #1C1C1E !important;
+}
+
+.dark-mode #filter-sort-select {
+  color: #fff !important;
+  background-color: #222 !important;
+}
+.dark-mode #filter-sort-select option {
+  color: #fff !important;
+  background-color: #222 !important;
+}
+
+/* Ensure dark mode filter modal select is light text on dark background */
+.dark-mode #filter-modal .modal-content #filter-sort-select {
+  color: #fff !important;
+  background-color: #222 !important;
+}
+.dark-mode #filter-modal .modal-content #filter-sort-select option {
+  color: #fff !important;
+  background-color: #222 !important;
+}
+
 /*
