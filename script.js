@@ -2097,6 +2097,20 @@ function parseCSVLine(line) {
     return result;
 }
 
+// Add this function before the DOMContentLoaded event listener
+function handleSynopsisEditClick() {
+    const synopsisTextArea = document.getElementById('synopsis-edit-input');
+    const synopsisDisplayArea = document.querySelector('.synopsis-display-area');
+    const editSynopsisBtn = document.getElementById('edit-synopsis-btn');
+    
+    if (!synopsisTextArea || !synopsisDisplayArea || !editSynopsisBtn) return;
+    
+    synopsisDisplayArea.style.display = 'none';
+    editSynopsisBtn.style.display = 'none';
+    synopsisTextArea.style.display = 'block';
+    synopsisTextArea.focus();
+}
+
 // --- Document Ready --- //
 document.addEventListener('DOMContentLoaded', function() {
     console.log("DOM fully loaded, initializing app...");
@@ -2642,4 +2656,9 @@ document.addEventListener('DOMContentLoaded', function() {
       };
     }
     // --- END Custom Reset Confirmation Modal Logic ---
+
+    // Add this inside the DOMContentLoaded event listener, where other event listeners are added
+    if (editSynopsisBtn) {
+        editSynopsisBtn.addEventListener('click', handleSynopsisEditClick);
+    }
 });
