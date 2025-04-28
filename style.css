@@ -584,7 +584,7 @@ button > span.material-symbols-outlined:only-child {
     color: var(--success-color);
     flex-shrink: 0;
     padding: 0.4rem 0.6rem;
-    font-size: 0.8rem;
+    font-size: 0.7rem;
     width: 100%;
     text-align: center;
     display: flex;
