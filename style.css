@@ -2090,4 +2090,8 @@ button > span.material-symbols-outlined:only-child {
 
 .btn-edit-small:hover {
     background-color: rgba(255, 107, 146, 0.1);
+}
+
+.dark-mode .app-title {
+    color: var(--primary-color);
 } 

@@ -914,6 +914,7 @@ function openRatingModal(bookId, isInitial) {
     }
     if (editReviewBtn) {
         editReviewBtn.style.display = 'inline-block';
+        editReviewBtn.textContent = currentReviewValue ? 'Edit Review' : 'Add Review';
     }
 
     // Setup interactive stars event listeners
