@@ -2105,10 +2105,42 @@ function handleSynopsisEditClick() {
     
     if (!synopsisTextArea || !synopsisDisplayArea || !editSynopsisBtn) return;
     
+    // Show textarea and change button to Save
     synopsisDisplayArea.style.display = 'none';
-    editSynopsisBtn.style.display = 'none';
     synopsisTextArea.style.display = 'block';
     synopsisTextArea.focus();
+    
+    // Change button text and appearance
+    editSynopsisBtn.textContent = 'Save';
+    editSynopsisBtn.classList.add('saving');
+    
+    // Change click handler to save
+    editSynopsisBtn.removeEventListener('click', handleSynopsisEditClick);
+    editSynopsisBtn.addEventListener('click', handleSynopsisSave);
+}
+
+function handleSynopsisSave() {
+    const synopsisTextArea = document.getElementById('synopsis-edit-input');
+    const synopsisDisplayArea = document.querySelector('.synopsis-display-area');
+    const synopsisDisplayText = document.getElementById('synopsis-display-text');
+    const editSynopsisBtn = document.getElementById('edit-synopsis-btn');
+    
+    if (!synopsisTextArea || !synopsisDisplayArea || !synopsisDisplayText || !editSynopsisBtn) return;
+    
+    // Update display text with new content
+    synopsisDisplayText.textContent = synopsisTextArea.value;
+    
+    // Hide textarea, show display
+    synopsisTextArea.style.display = 'none';
+    synopsisDisplayArea.style.display = 'block';
+    
+    // Change button back to Edit
+    editSynopsisBtn.textContent = 'Edit';
+    editSynopsisBtn.classList.remove('saving');
+    
+    // Change click handler back to edit
+    editSynopsisBtn.removeEventListener('click', handleSynopsisSave);
+    editSynopsisBtn.addEventListener('click', handleSynopsisEditClick);
 }
 
 // --- Document Ready --- //

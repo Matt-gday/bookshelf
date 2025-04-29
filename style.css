@@ -2260,14 +2260,15 @@ button > span.material-symbols-outlined:only-child {
 
 /* Dark mode filter modal: force light background and dark text for contrast */
 .dark-mode #filter-modal .modal-content {
-  background: #fff !important;
+  background-color: var(--card-bg) !important;
 }
 .dark-mode #filter-modal .modal-content > h2,
 .dark-mode #filter-modal .modal-content label,
 .dark-mode #filter-modal .modal-content legend,
 .dark-mode #filter-modal .modal-content input,
-.dark-mode #filter-modal .modal-content select {
-  color: #1C1C1E !important;
+.dark-mode #filter-modal .modal-content select,
+.dark-mode #filter-modal .modal-content option {
+  color: var(--text-color-dark) !important;
 }
 
 .dark-mode #filter-sort-select {
@@ -2289,4 +2290,81 @@ button > span.material-symbols-outlined:only-child {
   background-color: #222 !important;
 }
 
-/*
+/* Dark mode overrides for filter modal and synopsis text */
+.dark-mode #filter-modal .modal-content {
+    background-color: var(--card-bg) !important;
+}
+
+.dark-mode #filter-modal .modal-content > h2,
+.dark-mode #filter-modal .modal-content label,
+.dark-mode #filter-modal .modal-content legend,
+.dark-mode #filter-modal .modal-content input,
+.dark-mode #filter-modal .modal-content select,
+.dark-mode #filter-modal .modal-content option {
+    color: var(--text-color-dark) !important;
+}
+
+.dark-mode #edit-book-modal .modal-content #synopsis-display-text,
+.dark-mode #edit-book-modal .modal-content .synopsis-text {
+    color: var(--text-color-dark) !important;
+}
+
+/* Edit/Save button styles for synopsis */
+.btn-edit-synopsis {
+    background-color: var(--bg-color);
+    color: var(--primary-color);
+    padding: 0.3rem 0.6rem;
+    font-size: 0.7rem;
+    border-radius: var(--border-radius-sm);
+    border: 1px solid var(--border-color-light);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.btn-edit-synopsis:hover {
+    background-color: rgba(255, 107, 146, 0.1);
+}
+
+.btn-edit-synopsis.saving {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.dark-mode .btn-edit-synopsis {
+    background-color: rgba(255, 107, 146, 0.1);
+    color: var(--primary-color);
+}
+
+.dark-mode .btn-edit-synopsis:hover {
+    background-color: rgba(255, 107, 146, 0.2);
+}
+
+.dark-mode .btn-edit-synopsis.saving {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+/* Dark mode overrides for modals */
+.dark-mode #add-book-form-container .modal-content,
+.dark-mode #edit-book-modal .modal-content {
+    background: linear-gradient(135deg, var(--card-bg) 80%, #2C2C2E 100%);
+}
+
+.dark-mode #add-book-form-container .modal-content input,
+.dark-mode #add-book-form-container .modal-content select,
+.dark-mode #add-book-form-container .modal-content textarea,
+.dark-mode #edit-book-modal .modal-content input,
+.dark-mode #edit-book-modal .modal-content select,
+.dark-mode #edit-book-modal .modal-content textarea {
+    background-color: #1C1C1E;
+    color: var(--text-color-dark);
+    border-color: #38383A;
+}
+
+/* Specific override for synopsis text only since it has a light background */
+.dark-mode #edit-book-modal .modal-content #synopsis-display-text,
+.dark-mode #edit-book-modal .modal-content .synopsis-text {
+    background-color: var(--bg-color);
+    color: #1C1C1E !important;
+}
