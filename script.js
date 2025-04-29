@@ -2130,6 +2130,11 @@ function handleSynopsisSave() {
     // Update display text with new content
     synopsisDisplayText.textContent = synopsisTextArea.value;
     
+    // --- Potential Fixes ---
+    // 1. Explicitly blur the textarea before hiding (might help mobile focus issues)
+    synopsisTextArea.blur();
+    // --- End Potential Fixes ---
+
     // Hide textarea, show display
     synopsisTextArea.style.display = 'none';
     synopsisDisplayArea.style.display = 'block';
@@ -2138,9 +2143,13 @@ function handleSynopsisSave() {
     editSynopsisBtn.textContent = 'Edit';
     editSynopsisBtn.classList.remove('saving');
     
-    // Change click handler back to edit
+    // Change click handler back to edit - add a tiny delay
     editSynopsisBtn.removeEventListener('click', handleSynopsisSave);
-    editSynopsisBtn.addEventListener('click', handleSynopsisEditClick);
+    setTimeout(() => {
+         // Ensure listener is only added once
+        editSynopsisBtn.removeEventListener('click', handleSynopsisEditClick); // Remove first just in case
+        editSynopsisBtn.addEventListener('click', handleSynopsisEditClick);
+    }, 50); // Small delay (50ms)
 }
 
 // --- Document Ready --- //
