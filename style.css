@@ -2441,3 +2441,10 @@ body.dark-mode #rating-review-modal #rating-value-display   /* Rating X/5 text (
     background-color: rgba(255, 107, 146, 0.15); /* Subtle pink background, like wishlist status */
     border-radius: 100px; /* Rounded pill shape */
 }
+
+/* Increase size of stars in the book detail modal */
+#book-detail-modal #detail-rating .rating-star-svg {
+    width: 28px; /* Twice the general 14px size */
+    height: 28px;
+    margin-right: 2px; /* Adjust spacing for larger stars */
+}

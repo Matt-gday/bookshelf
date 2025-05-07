@@ -139,13 +139,7 @@ let bookDisplayArea, viewToggleButton, addBookButton, isbnInputContainer, isbnMa
     detailStatus, detailReader, detailDateAdded, detailDateFinished, detailTags,
     detailSynopsis, detailPageCount, detailPublisher, detailPublicationYear, detailIsbn,
     detailNotesSection, detailNotes, editBookBtn, closeDetailBtn, formCoverPreview, apiGenresDisplay,
-    formApiGenres, saveBookBtn, synopsisDisplayText, editSynopsisBtn, synopsisEditInput,
-    detailReviewSection, detailReviewText, ratingModal, ratingModalTitle, interactiveStarsContainer,
-    ratingValueDisplay, reviewSection, reviewDisplayArea, reviewDisplayText, editReviewBtn,
-    reviewInput, ratingCancelBtn, ratingSaveBtn, ratingCloseBtn,
-    searchBtn, searchModal, searchInput, searchSubmitBtn, searchCancelBtn, searchStatusElement,
-    wishlistBtn, filterBtn, filterModal, filterForm, filterApplyBtn, filterClearBtn, filterCancelBtn,
-    sortSelect, removeCustomCoverBtn, settingsModal, // Add settingsModal variable
+    saveBookBtn, removeCustomCoverBtn, settingsModal, // Add settingsModal variable
     addManuallyBtn, deleteBookBtn, bookCountDisplayElement; // Add new button variables and bookCountDisplayElement
 
 
@@ -1508,10 +1502,6 @@ function startEditBook(bookId) {
     setVal('#userSeriesTitle', bookToEdit.userSeriesTitle);
     setVal('#userSeriesNumber', bookToEdit.userSeriesNumber);
     setVal('#userPageCount', bookToEdit.userPageCount);
-    const apiGenresInput = addBookForm.querySelector('#api-genres-input');
-    const apiGenresDiv = apiGenresInput?.closest('.form-group');
-    if (apiGenresDiv) apiGenresDiv.style.display = 'block';
-    setVal('#api-genres-input', (bookToEdit.apiGenres || []).join(', '));
 
     // Set the preview for existing user cover or API cover
     if (formCoverPreview) {
@@ -2236,7 +2226,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Add Book Form Elements
     formCoverPreview = document.getElementById('form-cover-preview');
     apiGenresDisplay = document.getElementById('api-genres-display');
-    formApiGenres = document.getElementById('api-genres-input');
     saveBookBtn = document.getElementById('save-book-btn');
     removeCustomCoverBtn = document.getElementById('remove-custom-cover-btn');
     addManuallyBtn = document.getElementById('add-manually-btn');
