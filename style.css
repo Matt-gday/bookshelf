@@ -558,6 +558,11 @@ button > span.material-symbols-outlined:only-child {
     background-color: rgba(255, 255, 255, 0.8);
 }
 
+/* Remove background hover effect for rating pill in dark mode */
+.dark-mode .stars-rating-pill:hover {
+    background-color: transparent;
+}
+
 /* Center stars with consistent spacing */
 .stars-rating-pill .rating-star-svg {
     width: 25px;
@@ -1814,6 +1819,18 @@ button > span.material-symbols-outlined:only-child {
     border-color: rgba(255, 107, 146, 0.3);
 }
 
+/* Dark mode: Make #edit-review-btn a pink button with white text */
+.dark-mode .review-section-area #edit-review-btn {
+    background-color: var(--primary-color) !important;
+    color: white !important;
+    border-color: var(--primary-hover-color) !important; /* Darker pink border */
+}
+
+.dark-mode .review-section-area #edit-review-btn:hover {
+    background-color: var(--primary-hover-color) !important; /* Darker pink background on hover */
+    color: white !important;
+}
+
 /* Star rating display that replaces the edit rating button */
 .rating-display {
     background-color: rgba(138, 43, 226, 0.15);
@@ -2367,4 +2384,60 @@ button > span.material-symbols-outlined:only-child {
 .dark-mode #edit-book-modal .modal-content .synopsis-text {
     background-color: var(--bg-color);
     color: #1C1C1E !important;
+}
+
+/* Dark mode specific styles for rating modal */
+body.dark-mode #rating-review-modal .modal-content p,
+body.dark-mode #rating-review-modal .modal-content label,
+body.dark-mode #rating-review-modal .modal-content h2,
+body.dark-mode #rating-review-modal .modal-content span,
+body.dark-mode #rating-review-modal .modal-content textarea,
+body.dark-mode #rating-review-modal .modal-content div {
+    color: #333 !important; /* Or your preferred dark text color */
+}
+
+/* Ensure buttons inside the rating modal in dark mode also have dark text if their background is light */
+body.dark-mode #rating-review-modal .modal-content button {
+    color: #333 !important; /* Or your preferred dark text color for buttons */
+}
+
+/* If there are specific elements that should remain light, they can be targeted here too */
+/* Example: body.dark-mode #rating-review-modal .some-specific-element-class { color: #fff !important; } */
+
+#custom-alert-modal .modal-content {
+    background-color: var(--card-bg) !important;
+    color: var(--text-color-dark) !important;
+    border-color: var(--border-color-light) !important;
+}
+
+/* Dark mode specific styles for text in rating modal (which has a light background) */
+body.dark-mode #rating-review-modal .modal-content h2,      /* Modal Title */
+body.dark-mode #rating-review-modal .modal-content p,       /* e.g., Review display text */
+body.dark-mode #rating-review-modal .modal-content label,   /* e.g., "Your Review:" label */
+body.dark-mode #rating-review-modal .modal-content textarea, /* Review input field */
+body.dark-mode #rating-review-modal #rating-value-display   /* Rating X/5 text (is a div) */
+{
+    color: #333 !important;
+}
+
+/* Buttons within the rating modal will rely on their own specific styles
+   or general button styles which should handle dark mode text/background contrast.
+   The #edit-review-btn, for example, has:
+   background-color: var(--card-bg); (dark grey in dark mode)
+   color: var(--primary-color); (pink)
+   This combination is correct for dark mode and should not be overridden.
+*/
+
+/* If there are specific elements that should remain light, they can be targeted here too */
+
+/* Book Count Display Area */
+.book-count-display-area {
+    display: inline-block; /* Make it a pill shape around the text */
+    padding: 0.2em 0.7em; /* Padding for the pill shape */
+    margin-bottom: 0.3rem; /* Adjusted margin for spacing */
+    margin-left: 0; /* Resetting any specific left margin/padding for alignment */
+    font-size: 0.9rem;
+    color: var(--primary-color);
+    background-color: rgba(255, 107, 146, 0.15); /* Subtle pink background, like wishlist status */
+    border-radius: 100px; /* Rounded pill shape */
 }

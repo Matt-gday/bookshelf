@@ -136,7 +136,7 @@ let bookDisplayArea, viewToggleButton, addBookButton, isbnInputContainer, isbnMa
     isbnLookupButton, cancelIsbnInputButton, lookupStatusElement, seriesTitlesDatalist,
     addBookFormContainer, addBookForm, cancelAddBookButton, addBookFormTitle, resetDataButton,
     bookDetailModal, detailCover, detailTitle, detailAuthor, detailSeries, detailRating,
-    detailStatus, detailReader, detailDateAdded, detailDateFinished, detailGenres, detailTags,
+    detailStatus, detailReader, detailDateAdded, detailDateFinished, detailTags,
     detailSynopsis, detailPageCount, detailPublisher, detailPublicationYear, detailIsbn,
     detailNotesSection, detailNotes, editBookBtn, closeDetailBtn, formCoverPreview, apiGenresDisplay,
     formApiGenres, saveBookBtn, synopsisDisplayText, editSynopsisBtn, synopsisEditInput,
@@ -146,7 +146,7 @@ let bookDisplayArea, viewToggleButton, addBookButton, isbnInputContainer, isbnMa
     searchBtn, searchModal, searchInput, searchSubmitBtn, searchCancelBtn, searchStatusElement,
     wishlistBtn, filterBtn, filterModal, filterForm, filterApplyBtn, filterClearBtn, filterCancelBtn,
     sortSelect, removeCustomCoverBtn, settingsModal, // Add settingsModal variable
-    addManuallyBtn, deleteBookBtn; // Add new button variables
+    addManuallyBtn, deleteBookBtn, bookCountDisplayElement; // Add new button variables and bookCountDisplayElement
 
 
 // --- Helper Functions ---
@@ -233,8 +233,8 @@ function populateSeriesDatalist() {
 
 // --- UI Rendering Functions ---
 function renderBooks() {
-    if (!bookDisplayArea) {
-        console.error("Unable to find book display area");
+    if (!bookDisplayArea || !bookCountDisplayElement) { // Added bookCountDisplayElement check
+        console.error("Unable to find book display area or book count display element");
         return;
     }
 
@@ -362,6 +362,9 @@ function renderBooks() {
         else {
             emptyMessage = 'Your bookshelf is empty';
         }
+
+        // Update book count display even when empty
+        bookCountDisplayElement.textContent = "0 books"; // Simplified message
         
         bookDisplayArea.innerHTML = `
             <div class="empty-state">
@@ -385,6 +388,11 @@ function renderBooks() {
         }
         return;
     }
+
+    // Update book count display
+    const bookCount = displayBooks.length;
+    const pluralSuffix = bookCount === 1 ? "book" : "books"; // Suffix includes "book(s)"
+    bookCountDisplayElement.textContent = `${bookCount} ${pluralSuffix}`; // Simplified message
 
     // Select view type
     let viewClassName;
@@ -514,7 +522,7 @@ function handleBookAreaClick(event) {
 
     // Handle covers view rating badge click (yellow badge)
     if (event.target.closest('.covers-rating-badge')) {
-        openRatingModal(bookId, false);
+                openRatingModal(bookId, false);
         event.stopPropagation();
         return;
     }
@@ -539,9 +547,9 @@ function handleBookAreaClick(event) {
 
     // Handle add to bookshelf button click
     if (event.target.closest('.btn-add-to-bookshelf')) {
-        handleAddToBookshelfClick(bookId);
+            handleAddToBookshelfClick(bookId);
         return;
-    }
+        }
 
     // If no specific element was clicked, show the book detail modal
     showBookDetailModal(bookId);
@@ -838,7 +846,6 @@ function showBookDetailModal(bookId) {
     setText(detailReader, book.reader);
     setText(detailDateAdded, formatDisplayDate(book.dateAdded));
     setText(detailDateFinished, formatDisplayDate(book.dateFinished));
-    setText(detailGenres, book.apiGenres.join(', ') || 'N/A');
     setText(detailTags, book.customTags.join(', ') || 'N/A');
     setText(detailSynopsis, book.synopsis);
     setText(detailPageCount, book.effectivePageCount ?? 'N/A');
@@ -950,7 +957,7 @@ function openRatingModal(bookId, isInitial) {
 function closeRatingModal() {
     if (ratingModal) {
         hideModal(ratingModal);
-        currentRatingBookId = null;
+    currentRatingBookId = null;
     }
     if (reviewDisplayArea) reviewDisplayArea.style.display = 'block';
     if (editReviewBtn) editReviewBtn.style.display = 'inline-block';
@@ -1066,7 +1073,7 @@ function handleStarInteractionStart(event) {
     console.log(`Initial rating calculation: ${newRating}`);
     if (typeof newRating === 'number') { 
         updateInteractiveStarsVisual(newRating);
-    }
+}
 }
 
 function handleStarInteractionMove(event) {
@@ -1075,7 +1082,7 @@ function handleStarInteractionMove(event) {
     console.log(`Move rating calculation: ${newRating}`);
     if (typeof newRating === 'number') { 
         updateInteractiveStarsVisual(newRating);
-    }
+}
 }
 
 function handleStarInteractionEnd(event) {
@@ -1734,18 +1741,18 @@ function handleAddBookSubmit(event) {
 
 // --- Data Reset ---
 function resetAllData() {
-    try {
-        localStorage.removeItem(STORAGE_KEY);
-        localStorage.removeItem(SERIES_STORAGE_KEY);
-        allBooks = [];
-        currentlyFetchedApiData = null; currentlyEditingBookId = null;
-        isSearchActive = false; currentSearchTerm = ''; isWishlistViewActive = false;
-        if(searchBtn) searchBtn.textContent = 'Search';
-        if(wishlistBtn) { wishlistBtn.textContent = 'Wishlist'; wishlistBtn.classList.remove('active'); }
-        renderBooks();
-        populateSeriesDatalist();
-        alert("Bookshelf data has been reset.");
-    } catch (error) { console.error("Error clearing data:", error); alert("An error occurred resetting data."); }
+        try {
+            localStorage.removeItem(STORAGE_KEY);
+            localStorage.removeItem(SERIES_STORAGE_KEY);
+            allBooks = [];
+            currentlyFetchedApiData = null; currentlyEditingBookId = null;
+            isSearchActive = false; currentSearchTerm = ''; isWishlistViewActive = false;
+            if(searchBtn) searchBtn.textContent = 'Search';
+            if(wishlistBtn) { wishlistBtn.textContent = 'Wishlist'; wishlistBtn.classList.remove('active'); }
+            renderBooks();
+            populateSeriesDatalist();
+            alert("Bookshelf data has been reset.");
+        } catch (error) { console.error("Error clearing data:", error); alert("An error occurred resetting data."); }
 }
 
 
@@ -1779,7 +1786,7 @@ function showFilterModal() {
     showModal(filterModal);
 }
 
-function hideFilterModal() { 
+function hideFilterModal() {
     if (filterModal) { 
         hideModal(filterModal);
     } 
@@ -1823,7 +1830,7 @@ function handleApplyFilters() {
     if (filterBtn && isFilterActive) {
         filterBtn.classList.add('active');
     }
-    
+
     renderBooks(); // Re-render with new filters
     hideFilterModal();
 }
@@ -2160,13 +2167,14 @@ document.addEventListener('DOMContentLoaded', function() {
     updateDarkModeUI();
     
     // --- UI Elements (Assignment) ---
-        bookDisplayArea = document.getElementById('book-display-area');
+    bookDisplayArea = document.getElementById('book-display-area');
+    bookCountDisplayElement = document.getElementById('book-count-display'); // Assign the new element
     
     // Initialize all UI element references
-        isbnInputContainer = document.getElementById('isbn-input-container');
-        isbnManualInput = document.getElementById('isbn-manual-input');
-        isbnLookupButton = document.getElementById('isbn-lookup-btn');
-        cancelIsbnInputButton = document.getElementById('cancel-isbn-input-btn');
+    isbnInputContainer = document.getElementById('isbn-input-container');
+    isbnManualInput = document.getElementById('isbn-manual-input');
+    isbnLookupButton = document.getElementById('isbn-lookup-btn');
+    cancelIsbnInputButton = document.getElementById('cancel-isbn-input-btn');
     lookupStatusElement = document.getElementById('isbn-lookup-status');
     seriesTitlesDatalist = document.getElementById('series-titles-list');
     addBookFormContainer = document.getElementById('add-book-form-container');
@@ -2174,11 +2182,11 @@ document.addEventListener('DOMContentLoaded', function() {
     cancelAddBookButton = document.getElementById('cancel-add-book-btn');
     addBookFormTitle = document.getElementById('add-book-form-title');
     resetDataButton = document.getElementById('reset-data-btn');
-        searchModal = document.getElementById('search-modal');
-        searchInput = document.getElementById('search-input');
-        searchSubmitBtn = document.getElementById('search-submit-btn');
-        searchCancelBtn = document.getElementById('search-cancel-btn');
-        searchStatusElement = document.getElementById('search-status');
+    searchModal = document.getElementById('search-modal');
+    searchInput = document.getElementById('search-input');
+    searchSubmitBtn = document.getElementById('search-submit-btn');
+    searchCancelBtn = document.getElementById('search-cancel-btn');
+    searchStatusElement = document.getElementById('search-status');
     filterModal = document.getElementById('filter-modal');
     filterForm = document.getElementById('filter-form');
     filterApplyBtn = document.getElementById('filter-apply-btn');
@@ -2186,25 +2194,24 @@ document.addEventListener('DOMContentLoaded', function() {
     filterCancelBtn = document.getElementById('filter-cancel-btn');
     
     // Book Detail Modal Elements
-        bookDetailModal = document.getElementById('book-detail-modal');
-        detailCover = document.getElementById('detail-cover');
-        detailTitle = document.getElementById('detail-title');
-        detailAuthor = document.getElementById('detail-author');
-        detailSeries = document.getElementById('detail-series');
-        detailRating = document.getElementById('detail-rating');
-        detailStatus = document.getElementById('detail-status');
-        detailReader = document.getElementById('detail-reader');
-        detailDateAdded = document.getElementById('detail-date-added');
-        detailDateFinished = document.getElementById('detail-date-finished');
-        detailGenres = document.getElementById('detail-genres');
-        detailTags = document.getElementById('detail-tags');
-        detailSynopsis = document.getElementById('detail-synopsis');
-        detailPageCount = document.getElementById('detail-page-count');
-        detailPublisher = document.getElementById('detail-publisher');
-        detailPublicationYear = document.getElementById('detail-publication-year');
-        detailIsbn = document.getElementById('detail-isbn');
-        editBookBtn = document.getElementById('edit-book-btn');
-        closeDetailBtn = document.getElementById('close-detail-btn');
+    bookDetailModal = document.getElementById('book-detail-modal');
+    detailCover = document.getElementById('detail-cover');
+    detailTitle = document.getElementById('detail-title');
+    detailAuthor = document.getElementById('detail-author');
+    detailSeries = document.getElementById('detail-series');
+    detailRating = document.getElementById('detail-rating');
+    detailStatus = document.getElementById('detail-status');
+    detailReader = document.getElementById('detail-reader');
+    detailDateAdded = document.getElementById('detail-date-added');
+    detailDateFinished = document.getElementById('detail-date-finished');
+    detailTags = document.getElementById('detail-tags');
+    detailSynopsis = document.getElementById('detail-synopsis');
+    detailPageCount = document.getElementById('detail-page-count');
+    detailPublisher = document.getElementById('detail-publisher');
+    detailPublicationYear = document.getElementById('detail-publication-year');
+    detailIsbn = document.getElementById('detail-isbn');
+    editBookBtn = document.getElementById('edit-book-btn');
+    closeDetailBtn = document.getElementById('close-detail-btn');
     deleteBookBtn = document.getElementById('delete-book-btn');
     synopsisDisplayText = document.getElementById('synopsis-display-text');
     editSynopsisBtn = document.getElementById('edit-synopsis-btn');
@@ -2213,18 +2220,18 @@ document.addEventListener('DOMContentLoaded', function() {
     detailReviewText = document.getElementById('detail-review-text');
     
     // Rating Modal Elements
-        ratingModal = document.getElementById('rating-review-modal');
-        ratingModalTitle = document.getElementById('rating-modal-title');
-        interactiveStarsContainer = document.getElementById('interactive-stars');
-        ratingValueDisplay = document.getElementById('rating-value-display');
-        reviewSection = document.getElementById('review-section');
-        reviewDisplayArea = document.getElementById('review-display-area');
-        reviewDisplayText = document.getElementById('review-display-text');
-        editReviewBtn = document.getElementById('edit-review-btn');
-        reviewInput = document.getElementById('review-input');
-        ratingCancelBtn = document.getElementById('rating-cancel-btn');
-        ratingSaveBtn = document.getElementById('rating-save-btn');
-        ratingCloseBtn = document.getElementById('rating-close-btn');
+    ratingModal = document.getElementById('rating-review-modal');
+    ratingModalTitle = document.getElementById('rating-modal-title');
+    interactiveStarsContainer = document.getElementById('interactive-stars');
+    ratingValueDisplay = document.getElementById('rating-value-display');
+    reviewSection = document.getElementById('review-section');
+    reviewDisplayArea = document.getElementById('review-display-area');
+    reviewDisplayText = document.getElementById('review-display-text');
+    editReviewBtn = document.getElementById('edit-review-btn');
+    reviewInput = document.getElementById('review-input');
+    ratingCancelBtn = document.getElementById('rating-cancel-btn');
+    ratingSaveBtn = document.getElementById('rating-save-btn');
+    ratingCloseBtn = document.getElementById('rating-close-btn');
     
     // Add Book Form Elements
     formCoverPreview = document.getElementById('form-cover-preview');
@@ -2232,7 +2239,7 @@ document.addEventListener('DOMContentLoaded', function() {
     formApiGenres = document.getElementById('api-genres-input');
     saveBookBtn = document.getElementById('save-book-btn');
     removeCustomCoverBtn = document.getElementById('remove-custom-cover-btn');
-        addManuallyBtn = document.getElementById('add-manually-btn');
+    addManuallyBtn = document.getElementById('add-manually-btn');
     
     // Bottom Navigation Bar Elements
     const homeNavBtn = document.getElementById('home-nav-btn');
@@ -2306,7 +2313,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (filterCancelBtn) filterCancelBtn.addEventListener('click', hideFilterModal);
     
     // ISBN input modal
-    if (isbnLookupButton) isbnLookupButton.addEventListener('click', handleIsbnLookup);
+        if (isbnLookupButton) isbnLookupButton.addEventListener('click', handleIsbnLookup);
     if (cancelIsbnInputButton) {
         cancelIsbnInputButton.addEventListener('click', function() {
             console.log("Cancel ISBN lookup clicked");
@@ -2381,9 +2388,9 @@ document.addEventListener('DOMContentLoaded', function() {
         deleteBookBtn.addEventListener('click', () => {
             if (detailModalBookId) {
                 handleDeleteBook(detailModalBookId);
+                     }
+                 });
             }
-        });
-    }
     
     // Rating modal
         if (ratingCancelBtn) ratingCancelBtn.addEventListener('click', handleRatingCancel);
@@ -2456,7 +2463,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (isSearchActive) {
                 clearSearch();
                 setActiveNavButtons();
-            } else {
+                    } else {
                 // Show search modal
                 showSearchModal();
             }
