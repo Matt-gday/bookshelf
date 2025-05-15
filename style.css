@@ -2448,3 +2448,38 @@ body.dark-mode #rating-review-modal #rating-value-display   /* Rating X/5 text (
     height: 28px;
     margin-right: 2px; /* Adjust spacing for larger stars */
 }
+
+/* Validation Error Styling */
+.input-error {
+    border: 1px solid var(--danger-color, #dc3545) !important;
+    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25) !important; 
+}
+
+/* Styling for radio button groups that are invalid */
+.form-group.input-error-group > label, /* Label directly under .form-group */
+.radio-group-container.input-error-group > label, /* Label directly under .radio-group-container */
+fieldset.input-error-group > legend /* Legend of a fieldset */ {
+    color: var(--danger-color, #dc3545) !important;
+    font-weight: bold !important;
+}
+
+/* Add a border to the container of the invalid radio group */
+.form-group.input-error-group,
+.radio-group-container.input-error-group,
+fieldset.input-error-group {
+    border: 1px solid var(--danger-color, #dc3545) !important;
+    /* Add padding if the border feels too close to the content, e.g., padding: 0.5rem; */
+    /* Be cautious with adding padding here as it might affect layout if not already accounted for */
+    border-radius: var(--border-radius-md); /* Optional: match other input rounding */
+}
+
+/* Ensure select elements also show error state clearly */
+select.input-error {
+    border: 1px solid var(--danger-color, #dc3545) !important;
+    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25) !important;
+}
+
+/* Adjust focus style for error fields if needed, or rely on default + box-shadow */
+.input-error:focus {
+    /* box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.45) !important; */ /* Slightly more intense shadow on focus */
+}

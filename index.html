@@ -318,15 +318,11 @@
                         </div>
 
                         <div class="form-group span-2">
-                            <label>Upload Custom Cover:</label>
-                            <div class="custom-file-upload">
-                                <label class="file-upload-btn" for="userCoverImage">
-                                    <span class="material-symbols-outlined">photo_library</span> Choose File
-                                </label>
-                                <input type="file" id="userCoverImage" name="userCoverImage" accept="image/*">
-                                <span class="file-name" id="file-name-display">No file chosen</span>
+                            <label for="userCoverImageUrl">Custom Cover URL:</label>
+                            <div class="input-group" style="margin-bottom: 8px;">
+                                <input type="url" id="userCoverImageUrl" name="userCoverImageUrl" placeholder="Enter image URL" style="flex-grow: 1;">
                             </div>
-                            <button type="button" id="remove-custom-cover-btn" class="btn btn-secondary btn-small">Remove Custom Cover</button>
+                            <button type="button" id="remove-custom-cover-btn" class="btn btn-secondary btn-small" style="margin-top: 0px; display: none;">Remove Custom Cover</button>
                         </div>
                     </div>
 
@@ -436,15 +432,15 @@
                 <div class="settings-group">
                     <h3>Data Management</h3>
                     <div class="settings-buttons">
-                        <button id="export-btn" class="btn-secondary settings-action-btn">
+                        <button id="export-data-btn" class="btn-secondary settings-action-btn">
                             <span class="material-symbols-outlined">download</span>
                             <span>Export Data (CSV)</span>
                         </button>
-                        <button id="import-btn" class="btn-secondary settings-action-btn">
+                        <button id="import-data-btn" class="btn-secondary settings-action-btn">
                             <span class="material-symbols-outlined">upload</span>
                             <span>Import Data (CSV)</span>
                         </button>
-                        <input type="file" id="import-file-input" accept=".csv" style="display: none;">
+                        <input type="file" id="csv-file-input" accept=".csv" style="display: none;">
                     </div>
                 </div>
             </div>
