@@ -830,6 +830,37 @@ body:has(.modal-container.visible) .bottom-nav {
     grid-column: span 2;
 }
 
+/* Style for the cover preview area in the add/edit form */
+#add-book-form .form-cover-preview-area {
+    grid-column: span 2; /* Ensure it spans full width in the grid */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 160px; /* Give it a minimum height even when image is hidden */
+    background-color: var(--placeholder-bg); /* Optional: placeholder bg */
+    border-radius: var(--border-radius-md);
+    margin-bottom: 1rem; /* Consistent margin */
+    padding: 0.5rem; /* Some padding */
+}
+
+#add-book-form img#form-cover-preview {
+    display: none; /* Initially hidden as per JS logic */
+    max-height: 150px;
+    max-width: 100%; /* Ensure it doesn't overflow its container */
+    object-fit: contain;
+    border-radius: var(--border-radius-sm);
+}
+
+#add-book-form img#form-cover-preview.placeholder {
+    /* Styles for when it's specifically a placeholder (no API/Custom image yet) */
+    /* Potentially hide or show a different placeholder icon/text via CSS */
+}
+
+#add-book-form img#form-cover-preview.custom-cover,
+#add-book-form img#form-cover-preview.api-cover {
+    display: block !important; /* Ensure it shows when class is present */
+}
+
 /* Make title and author full width */
 #add-book-form .form-group.full-width {
     grid-column: span 2;
