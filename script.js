@@ -1148,16 +1148,29 @@ function handleAddToBookshelfClick(bookId) {
 function showModal(modalElement) {
     if (!modalElement) return;
     
-    // Add visible class to the modal
     modalElement.classList.add('visible');
-    document.body.classList.add('modal-open'); // Prevent body scrolling
+    document.body.classList.add('modal-open');
     
-    // Hide bottom navigation when modal is visible
     const bottomNav = document.querySelector('.bottom-nav');
     if (bottomNav) {
         bottomNav.style.visibility = 'hidden';
         bottomNav.style.opacity = '0';
         bottomNav.style.zIndex = '-1';
+    }
+
+    // Force reflow/repaint for Safari touch offset issues
+    const modalContent = modalElement.querySelector('.modal-content');
+    if (modalContent) {
+        setTimeout(() => {
+            // Temporarily change a style that forces reflow
+            const originalPaddingTop = modalContent.style.paddingTop;
+            modalContent.style.paddingTop = (parseFloat(getComputedStyle(modalContent).paddingTop) + 0.1) + 'px';
+            // And revert it almost immediately
+            requestAnimationFrame(() => {
+                modalContent.style.paddingTop = originalPaddingTop;
+            });
+            console.log("[showModal] Applied temporary style change to force reflow for modal:", modalElement.id);
+        }, 50); // Small delay to ensure modal is fully visible and transitions (if any) have started
     }
 }
 

@@ -841,6 +841,7 @@ body:has(.modal-container.visible) .bottom-nav {
     border-radius: var(--border-radius-md);
     margin-bottom: 1rem; /* Consistent margin */
     padding: 0.5rem; /* Some padding */
+    /* display: none !important; */ /* REVERTED: This was a temporary test */
 }
 
 #add-book-form img#form-cover-preview {
