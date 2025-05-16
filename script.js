@@ -1150,6 +1150,7 @@ function showModal(modalElement) {
     
     // Add visible class to the modal
     modalElement.classList.add('visible');
+    document.body.classList.add('modal-open'); // Prevent body scrolling
     
     // Hide bottom navigation when modal is visible
     const bottomNav = document.querySelector('.bottom-nav');
@@ -1170,6 +1171,7 @@ function hideModal(modalElement) {
     // Check if any other modals are visible
     const visibleModals = document.querySelectorAll('.modal-container.visible');
     if (visibleModals.length === 0) {
+        document.body.classList.remove('modal-open'); // Restore body scrolling
         // No visible modals, restore bottom navigation
         const bottomNav = document.querySelector('.bottom-nav');
         if (bottomNav) {

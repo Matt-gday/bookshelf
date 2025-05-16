@@ -133,6 +133,10 @@ body {
     padding-bottom: 80px; /* Space for bottom navigation bar */
 }
 
+body.modal-open {
+    overflow: hidden; /* Prevent body scroll when a modal is open */
+}
+
 h1, h2, h3, h4, h5, h6 {
     font-weight: 600;
     line-height: 1.3;
