@@ -761,15 +761,15 @@ body:has(.modal-container.visible) .bottom-nav {
     max-width: 500px;
     max-height: 90vh;
     overflow-y: auto;
-    transform: translateY(20px);
-    transition: transform 0.3s ease;
+    /* transform: translateY(20px); */ /* Temporarily disable for iOS touch testing */
+    /* transition: transform 0.3s ease; */ /* Temporarily disable for iOS touch testing */
     position: relative;
     display: flex;
     flex-direction: column;
 }
 
 .modal-container.visible .modal-content {
-    transform: translateY(0);
+    /* transform: translateY(0); */ /* Temporarily disable for iOS touch testing */
 }
 
 .modal-content h2 {
